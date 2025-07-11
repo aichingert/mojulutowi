@@ -1,6 +1,5 @@
-#include "lu/window.h"
-#include "../build/xdg-shell.h"
+#include "window.h"
 
 int main(void) {
-
+    Window win = lu_create_window("hello", 640, 480);
 }
