@@ -5,11 +5,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <sys/mman.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <time.h>
+
+#include "vulkan.h"
 #include "xdg-shell.h"
 
 typedef struct Window {
