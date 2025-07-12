@@ -1,6 +1,9 @@
 #ifndef LU_VULKAN_H
 #define LU_VULKAN_H
 
+#include "lu.h"
+#include "window.h"
+
 #include <dlfcn.h>
 #include <assert.h>
 
@@ -11,10 +14,12 @@
     do \
     { \
         VkResult result_ = call; \
+        if (result_ != VK_SUCCESS) { \
+            printf("VK_ERROR: %d\n", result_); \
+        } \
         assert(result_ == VK_SUCCESS); \
     } while(0)
 
-VkInstance  lu_create_instance();
-VkDevice    lu_create_device();
+void        lu_setup_vulkan(Window *win, const char *name);
 
 #endif /* LU_VULKAN_H */

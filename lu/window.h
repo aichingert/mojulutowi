@@ -6,7 +6,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include "vulkan.h"
 #include "xdg-shell.h"
 
 typedef struct Window {

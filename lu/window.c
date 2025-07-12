@@ -1,4 +1,5 @@
 #include "window.h"
+#include "vulkan.h"
 
 static void xdg_surface_configure(
         void *data,
@@ -120,10 +121,7 @@ Window *lu_create_window(
     win->height = height;
 
     lu_setup_wl_window(win, title);
-
-    // TODO: probably want to do something 
-    // like this in the future
-    // lu_setup_vulkan();
+    lu_setup_vulkan(win, title);
 
     return win;
 }
