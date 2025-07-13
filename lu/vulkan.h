@@ -8,6 +8,7 @@
 #include <assert.h>
 
 #define VK_NO_PROTOTYPES
+#define VK_USE_PLATFORM_WAYLAND_KHR
 #include <vulkan/vulkan.h>
 
 #define VK_CHECK(call) \
@@ -19,6 +20,7 @@
         } \
         assert(result_ == VK_SUCCESS); \
     } while(0)
+
 
 void        lu_setup_vulkan(Window *win, const char *name);
 

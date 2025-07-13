@@ -6,7 +6,7 @@ file(GLOB_RECURSE C_SOURCE_FILES "*.h" "*.c")
 add_library(lu ${C_SOURCE_FILES})
 target_include_directories(lu PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
-set(CMAKE_C_FLAGS "-Wall -Wpedantic -lwayland-client")
+set(CMAKE_C_FLAGS "-Wall -Wpedantic -lwayland-client -Wreturn-type -fsanitize=address,leak,undefined -fstack-protector")
 
 set(SCANNER "wayland-scanner")
 set(XDG_SHELL_PATH "/usr/share/wayland-protocols/stable/xdg-shell/xdg-shell.xml")
