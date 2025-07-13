@@ -5,5 +5,7 @@ int main(void) {
 
     while (lu_poll_events(win)) {
     }
+
+    lu_terminate(win);
 }
 

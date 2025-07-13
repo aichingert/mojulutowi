@@ -22,6 +22,7 @@
     } while(0)
 
 
-void        lu_setup_vulkan(Window *win, const char *name);
+void        lu_setup_renderer(Window *win, const char *name);
+void        lu_free_renderer(Window *win);
 
 #endif /* LU_VULKAN_H */

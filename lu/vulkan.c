@@ -17,11 +17,19 @@ PFN_vkGetPhysicalDeviceWaylandPresentationSupportKHR vkGetPhysicalDeviceWaylandP
 PFN_vkGetPhysicalDeviceSurfaceFormatsKHR vkGetPhysicalDeviceSurfaceFormatsKHR;
 PFN_vkGetPhysicalDeviceSurfacePresentModesKHR vkGetPhysicalDeviceSurfacePresentModesKHR;
 PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR vkGetPhysicalDeviceSurfaceCapabilitiesKHR;
-PFN_vkCreateSwapchainKHR vkCreateSwapchainKHR;
+PFN_vkDestroyDebugReportCallbackEXT vkDestroyDebugReportCallbackEXT;
+PFN_vkDestroySurfaceKHR vkDestroySurfaceKHR;
+PFN_vkDestroyInstance vkDestroyInstance;
 
 static PFN_vkGetDeviceProcAddr device_loader = NULL;
 
 PFN_vkGetDeviceQueue vkGetDeviceQueue;
+PFN_vkCreateSwapchainKHR vkCreateSwapchainKHR;
+PFN_vkDestroySwapchainKHR vkDestroySwapchainKHR;
+PFN_vkGetSwapchainImagesKHR vkGetSwapchainImagesKHR;
+PFN_vkDestroyImageView vkDestroyImageView;
+PFN_vkDestroyDevice vkDestroyDevice;
+PFN_vkCreateImageView vkCreateImageView;
 
 void load_instance_proc_addr() {
     // TODO: look for other names as well
@@ -60,11 +68,20 @@ void instance_load_vulkan(VkInstance instance) {
         (PFN_vkGetPhysicalDeviceSurfacePresentModesKHR)loader(instance, "vkGetPhysicalDeviceSurfacePresentModesKHR");
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR =
         (PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR)loader(instance, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
+    vkDestroyDebugReportCallbackEXT =
+        (PFN_vkDestroyDebugReportCallbackEXT)loader(instance, "vkDestroyDebugReportCallbackEXT");
+    vkDestroySurfaceKHR = (PFN_vkDestroySurfaceKHR)loader(instance, "vkDestroySurfaceKHR");
+    vkDestroyInstance = (PFN_vkDestroyInstance)loader(instance, "vkDestroyInstance");
 }
 
 void device_load_vulkan(VkDevice device) {
     vkGetDeviceQueue = (PFN_vkGetDeviceQueue)device_loader(device, "vkGetDeviceQueue");
     vkCreateSwapchainKHR = (PFN_vkCreateSwapchainKHR)device_loader(device, "vkCreateSwapchainKHR");
+    vkDestroySwapchainKHR = (PFN_vkDestroySwapchainKHR)device_loader(device, "vkDestroySwapchainKHR");
+    vkGetSwapchainImagesKHR = (PFN_vkGetSwapchainImagesKHR)device_loader(device, "vkGetSwapchainImagesKHR");
+    vkDestroyImageView = (PFN_vkDestroyImageView)device_loader(device, "vkDestroyImageView");
+    vkDestroyDevice = (PFN_vkDestroyDevice)device_loader(device, "vkDestroyDevice");
+    vkCreateImageView = (PFN_vkCreateImageView)device_loader(device, "vkCreateImageView");
 }
 
 bool validation_layers_are_available() {
@@ -146,7 +163,7 @@ VkDebugReportCallbackEXT register_debug_callback(VkInstance instance) {
 
 	VkDebugReportCallbackCreateInfoEXT create_info = { 
         .sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT,
-	    .flags = VK_DEBUG_REPORT_WARNING_BIT_EXT 
+        .flags = VK_DEBUG_REPORT_WARNING_BIT_EXT 
         | VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT 
         | VK_DEBUG_REPORT_ERROR_BIT_EXT,
         .pfnCallback = debug_callback,
@@ -156,16 +173,14 @@ VkDebugReportCallbackEXT register_debug_callback(VkInstance instance) {
 	VK_CHECK(vkCreateDebugReportCallbackEXT(instance, &create_info, 0, &callback));
 }
 
-VkSurfaceKHR lu_create_surface(Window *win, VkInstance instance) {
+void lu_create_surface(Window *win) {
     VkWaylandSurfaceCreateInfoKHR create_info = {
         .sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR,
         .display = win->display,
         .surface = win->surface,
     };
 
-    VkSurfaceKHR surface = {0};
-    VK_CHECK(vkCreateWaylandSurfaceKHR(instance, &create_info, NULL, &surface));
-    return surface;
+    VK_CHECK(vkCreateWaylandSurfaceKHR(win->renderer.instance, &create_info, NULL, &win->renderer.surface));
 }
 
 uint32_t find_queue_family(VkPhysicalDevice device) {
@@ -186,11 +201,10 @@ uint32_t find_queue_family(VkPhysicalDevice device) {
 
 // TODO: improve picking - score or smth
 // TODO: could have more extension checks
-VkPhysicalDevice pick_suitable_device(
-        Window *win, 
-        VkSurfaceKHR surface, 
-        VkInstance instance) 
-{
+void pick_suitable_device(Window *win) {
+    VkInstance instance = win->renderer.instance;
+    VkSurfaceKHR surface = win->renderer.surface;
+
     uint32_t device_count = 0;
     vkEnumeratePhysicalDevices(instance, &device_count, NULL);
 
@@ -218,25 +232,20 @@ VkPhysicalDevice pick_suitable_device(
         vkGetPhysicalDeviceProperties(devices[i], &device_properties);
         vkGetPhysicalDeviceFeatures(devices[i], &device_features);
 
-
         if (device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && 
             device_features.geometryShader) 
         {
-            return devices[i];
+            win->renderer.physical_device = devices[i];
+            return;
         }
     }
 
-    return VK_NULL_HANDLE;
+    assert(!"No suitable physical device found!");
 }
 
-VkDevice lu_create_device(
-        Window *win, 
-        VkSurfaceKHR surface, 
-        VkInstance instance, 
-        VkPhysicalDevice physical_device,
-        uint32_t *queue_family) 
-{ 
-    *queue_family = find_queue_family(physical_device);
+void lu_create_device(Window *win, uint32_t *queue_family) { 
+    VkPhysicalDevice physical = win->renderer.physical_device;
+    *queue_family = find_queue_family(physical);
     float    queue_priority = 1.0f;
 
     VkDeviceQueueCreateInfo queue_create_info = {
@@ -259,17 +268,14 @@ VkDevice lu_create_device(
         .ppEnabledExtensionNames    = device_extensions,
     };
 
-    VkDevice device = {0};
-    VK_CHECK(vkCreateDevice(physical_device, &create_info, NULL, &device));
-    return device;
+    VK_CHECK(vkCreateDevice(physical, &create_info, NULL, &win->renderer.device));
 }
 
-VkSwapchainKHR lu_create_swapchain(
-        Window *win, 
-        VkSurfaceKHR surface, 
-        VkPhysicalDevice physical,
-        VkDevice device) 
-{
+void lu_create_swapchain(Window *win) {
+    VkDevice device = win->renderer.device;
+    VkPhysicalDevice physical = win->renderer.physical_device;
+    VkSurfaceKHR surface = win->renderer.surface;
+
     uint32_t present_mode_count = 0, format_count = 0;
 
     vkGetPhysicalDeviceSurfaceFormatsKHR(physical, surface, &format_count, NULL);
@@ -279,7 +285,6 @@ VkSwapchainKHR lu_create_swapchain(
     vkGetPhysicalDeviceSurfacePresentModesKHR(physical, surface, &present_mode_count, NULL);
     VkPresentModeKHR modes[present_mode_count] = {};
     vkGetPhysicalDeviceSurfacePresentModesKHR(physical, surface, &present_mode_count, modes);
-
 
     VkSurfaceCapabilitiesKHR capabilities = {0};
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical, surface, &capabilities);
@@ -313,38 +318,79 @@ VkSwapchainKHR lu_create_swapchain(
 
     VkSwapchainKHR swapchain = {0};
     VK_CHECK(vkCreateSwapchainKHR(device, &create_info, NULL, &swapchain));
-    return swapchain;
+
+    vkGetSwapchainImagesKHR(device, swapchain, &image_count, NULL);
+    VkImage *images = (VkImage*)malloc(sizeof(VkImage) * image_count);
+    vkGetSwapchainImagesKHR(device, swapchain, &image_count, images);
+
+    win->renderer.format = formats[0].format;
+    win->renderer.images = images;
+    win->renderer.image_count = image_count;
 }
 
-void lu_setup_vulkan(Window *win, const char *name) {
+void lu_create_image_views(Window *win) {
+    VkRenderer vk = win->renderer;
+    vk.image_views = (VkImageView*)malloc(sizeof(VkImageView) * vk.image_count);
+
+    for (uint32_t i = 0; i < vk.image_count; i ++) {
+        VkImageViewCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .image = vk.images[i],
+            .viewType = VK_IMAGE_VIEW_TYPE_2D,
+            .format = vk.format,
+            .components = {
+                .r = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .a = VK_COMPONENT_SWIZZLE_IDENTITY,
+            },
+            .subresourceRange = {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+            },
+        };
+
+        VK_CHECK(vkCreateImageView(vk.device, &create_info, NULL, &vk.image_views[i]));
+    }
+}
+
+void lu_setup_renderer(Window *win, const char *name) {
     load_instance_proc_addr();
     VkInstance instance = lu_create_instance(name);
     instance_load_vulkan(instance);
 
-    VkDebugReportCallbackEXT callback = register_debug_callback(instance);
-    VkSurfaceKHR surface = lu_create_surface(win, instance);
+    win->renderer.callback = register_debug_callback(instance);
+    win->renderer.instance = instance;
 
-    VkPhysicalDevice physical_device = pick_suitable_device(win, surface, instance);
-    assert(physical_device != VK_NULL_HANDLE && "No suitable device found!");
+    lu_create_surface(win);
+    pick_suitable_device(win);
 
     uint32_t queue_family = 0;
-    VkDevice device    = lu_create_device(win, surface, instance, physical_device, &queue_family);
-    device_load_vulkan(device);
+    lu_create_device(win, &queue_family);
+    device_load_vulkan(win->renderer.device);
 
     VkQueue graphics_queue = {0};
-    vkGetDeviceQueue(device, queue_family, 0, &graphics_queue);
+    vkGetDeviceQueue(win->renderer.device, queue_family, 0, &graphics_queue);
 
-    VkSwapchainKHR swapchain = lu_create_swapchain(win, surface, physical_device, device);
+    lu_create_swapchain(win);
 
 }
 
-void lu_free_vulkan() {
-    // TODO:
-    //
-    // TODO: def
-    // DestroyDebugUtilMessengerEXT(instance, callback, NULL);
-    // vkDestroySwapchainKHR(device, swapchain, NULL);
-    // vkDestroyDevice(device, NULL);
-    // vkDestroySurface(instance, surface, NULL);
-    // vkDestroyInstance(instance, NULL);
+void lu_free_renderer(Window *win) {
+    VkRenderer vk = win->renderer;
+
+    for (uint32_t i = 0; i < vk.image_count; i++) {
+        vkDestroyImageView(vk.device, vk.image_views[i], NULL);
+    }
+
+    // TODO: ifdef debug
+    vkDestroyDebugReportCallbackEXT(vk.instance, vk.callback, NULL);
+
+    vkDestroySwapchainKHR(vk.device, vk.swapchain, NULL);
+    vkDestroyDevice(vk.device, NULL);
+    vkDestroySurfaceKHR(vk.instance, vk.surface, NULL);
+    vkDestroyInstance(vk.instance, NULL);
 }

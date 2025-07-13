@@ -121,13 +121,18 @@ Window *lu_create_window(
     win->height = height;
 
     lu_setup_wl_window(win, title);
-    lu_setup_vulkan(win, title);
+    lu_setup_renderer(win, title);
 
     return win;
 }
 
 int lu_poll_events(Window *win) {
     return wl_display_dispatch(win->display);
+}
+
+void lu_terminate(Window *win) {
+    lu_free_renderer(win);
+    free(win);
 }
 
 
