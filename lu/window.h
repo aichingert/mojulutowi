@@ -17,11 +17,19 @@ typedef struct VkRenderer {
     VkSurfaceKHR surface;
     VkPhysicalDevice physical_device;
     VkDevice device;
-    VkSwapchainKHR swapchain;
-    VkFormat    format;
-    VkImage     *images;
-    VkImageView *image_views;
-    uint32_t    image_count;
+
+    VkFormat        format;
+    VkSwapchainKHR  swapchain;
+    VkImage         *images;
+    VkImageView     *image_views;
+    VkFramebuffer   *framebuffers;
+    uint32_t        image_count;
+
+    VkRenderPass        render_pass;
+    VkPipelineLayout    pipeline_layout;
+    VkPipeline          graphics_pipeline;
+
+    VkCommandPool command_pool;
 
     // TODO: ifdef debug
     VkDebugReportCallbackEXT callback;
