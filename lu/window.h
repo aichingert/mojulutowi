@@ -25,11 +25,17 @@ typedef struct VkRenderer {
     VkFramebuffer   *framebuffers;
     uint32_t        image_count;
 
+    VkQueue             graphics_queue;
     VkRenderPass        render_pass;
     VkPipelineLayout    pipeline_layout;
     VkPipeline          graphics_pipeline;
 
-    VkCommandPool command_pool;
+    VkCommandPool   command_pool;
+    VkCommandBuffer command_buffer;
+
+    VkSemaphore acq_sema;
+    VkSemaphore rel_sema;
+    VkFence between_fence;
 
     // TODO: ifdef debug
     VkDebugReportCallbackEXT callback;

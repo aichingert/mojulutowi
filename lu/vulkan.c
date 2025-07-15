@@ -40,7 +40,29 @@ PFN_vkCreateGraphicsPipelines vkCreateGraphicsPipelines;
 PFN_vkDestroyPipeline vkDestroyPipeline;
 PFN_vkCreateFramebuffer vkCreateFramebuffer;
 PFN_vkDestroyFramebuffer vkDestroyFramebuffer;
- 
+PFN_vkCreateCommandPool vkCreateCommandPool;
+PFN_vkAllocateCommandBuffers vkAllocateCommandBuffers;
+PFN_vkDestroyCommandPool vkDestroyCommandPool;
+PFN_vkBeginCommandBuffer vkBeginCommandBuffer;
+PFN_vkCmdBeginRenderPass vkCmdBeginRenderPass;
+PFN_vkCmdBindPipeline vkCmdBindPipeline;
+PFN_vkCmdSetViewport vkCmdSetViewport;
+PFN_vkCmdSetScissor vkCmdSetScissor;
+PFN_vkCmdDraw vkCmdDraw;
+PFN_vkCmdEndRenderPass vkCmdEndRenderPass;
+PFN_vkEndCommandBuffer vkEndCommandBuffer;
+PFN_vkCreateSemaphore vkCreateSemaphore;
+PFN_vkDestroySemaphore vkDestroySemaphore;
+PFN_vkCreateFence vkCreateFence;
+PFN_vkDestroyFence vkDestroyFence;
+PFN_vkAcquireNextImageKHR vkAcquireNextImageKHR;
+PFN_vkResetCommandBuffer vkResetCommandBuffer;
+PFN_vkQueueSubmit vkQueueSubmit;
+PFN_vkWaitForFences vkWaitForFences;
+PFN_vkResetFences vkResetFences;
+PFN_vkQueuePresentKHR vkQueuePresentKHR;
+
+
 void load_instance_proc_addr() {
     // TODO: look for other names as well
     void *module = dlopen("libvulkan.so", RTLD_NOW | RTLD_LOCAL);
@@ -102,6 +124,27 @@ void device_load_vulkan(VkDevice device) {
     vkDestroyPipeline = (PFN_vkDestroyPipeline)device_loader(device, "vkDestroyPipeline");
     vkCreateFramebuffer = (PFN_vkCreateFramebuffer)device_loader(device, "vkCreateFramebuffer");
     vkDestroyFramebuffer = (PFN_vkDestroyFramebuffer)device_loader(device, "vkDestroyFramebuffer");
+    vkCreateCommandPool = (PFN_vkCreateCommandPool)device_loader(device, "vkCreateCommandPool");
+    vkAllocateCommandBuffers = (PFN_vkAllocateCommandBuffers)device_loader(device, "vkAllocateCommandBuffers");
+    vkDestroyCommandPool = (PFN_vkDestroyCommandPool)device_loader(device, "vkDestroyCommandPool");
+    vkBeginCommandBuffer = (PFN_vkBeginCommandBuffer)device_loader(device, "vkBeginCommandBuffer");
+    vkCmdBeginRenderPass = (PFN_vkCmdBeginRenderPass)device_loader(device, "vkCmdBeginRenderPass");
+    vkCmdBindPipeline = (PFN_vkCmdBindPipeline)device_loader(device, "vkCmdBindPipeline");
+    vkCmdSetViewport = (PFN_vkCmdSetViewport)device_loader(device, "vkCmdSetViewport");
+    vkCmdSetScissor = (PFN_vkCmdSetScissor)device_loader(device, "vkCmdSetScissor");
+    vkCmdDraw = (PFN_vkCmdDraw)device_loader(device, "vkCmdDraw");
+    vkCmdEndRenderPass = (PFN_vkCmdEndRenderPass)device_loader(device, "vkCmdEndRenderPass");
+    vkEndCommandBuffer = (PFN_vkEndCommandBuffer)device_loader(device, "vkEndCommandBuffer");
+    vkCreateSemaphore = (PFN_vkCreateSemaphore)device_loader(device, "vkCreateSemaphore");
+    vkDestroySemaphore = (PFN_vkDestroySemaphore)device_loader(device, "vkDestroySemaphore");
+    vkCreateFence = (PFN_vkCreateFence)device_loader(device, "vkCreateFence");
+    vkDestroyFence = (PFN_vkDestroyFence)device_loader(device, "vkDestroyFence");
+    vkAcquireNextImageKHR = (PFN_vkAcquireNextImageKHR)device_loader(device, "vkAcquireNextImageKHR");
+    vkResetCommandBuffer = (PFN_vkResetCommandBuffer)device_loader(device, "vkResetCommandBuffer");
+    vkQueueSubmit = (PFN_vkQueueSubmit)device_loader(device, "vkQueueSubmit");
+    vkWaitForFences = (PFN_vkWaitForFences)device_loader(device, "vkWaitForFences");
+    vkResetFences = (PFN_vkResetFences)device_loader(device, "vkResetFences");
+    vkQueuePresentKHR = (PFN_vkQueuePresentKHR)device_loader(device, "vkQueuePresentKHR");
 }
 
 bool validation_layers_are_available() {
@@ -302,22 +345,20 @@ void lu_create_device(Window *win, uint32_t *queue_family) {
 }
 
 void lu_create_swapchain(Window *win) {
-    VkDevice device = win->renderer.device;
-    VkPhysicalDevice physical = win->renderer.physical_device;
-    VkSurfaceKHR surface = win->renderer.surface;
+    VkRenderer vk = win->renderer;
 
     uint32_t present_mode_count = 0, format_count = 0;
 
-    vkGetPhysicalDeviceSurfaceFormatsKHR(physical, surface, &format_count, NULL);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(vk.physical_device, vk.surface, &format_count, NULL);
     VkSurfaceFormatKHR formats[format_count] = {};
-    vkGetPhysicalDeviceSurfaceFormatsKHR(physical, surface, &format_count, formats);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(vk.physical_device, vk.surface, &format_count, formats);
 
-    vkGetPhysicalDeviceSurfacePresentModesKHR(physical, surface, &present_mode_count, NULL);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(vk.physical_device, vk.surface, &present_mode_count, NULL);
     VkPresentModeKHR modes[present_mode_count] = {};
-    vkGetPhysicalDeviceSurfacePresentModesKHR(physical, surface, &present_mode_count, modes);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(vk.physical_device, vk.surface, &present_mode_count, modes);
 
     VkSurfaceCapabilitiesKHR capabilities = {0};
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical, surface, &capabilities);
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vk.physical_device, vk.surface, &capabilities);
 
     VkExtent2D extent = {
         .width = win->width,
@@ -331,7 +372,7 @@ void lu_create_swapchain(Window *win) {
 
     VkSwapchainCreateInfoKHR create_info = {
         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-        .surface = surface,
+        .surface = vk.surface,
         .minImageCount = image_count,
         .imageExtent = extent,
         .imageFormat = formats[0].format,
@@ -347,15 +388,16 @@ void lu_create_swapchain(Window *win) {
     };
 
     VkSwapchainKHR swapchain = {0};
-    VK_CHECK(vkCreateSwapchainKHR(device, &create_info, NULL, &swapchain));
+    VK_CHECK(vkCreateSwapchainKHR(vk.device, &create_info, NULL, &swapchain));
 
-    vkGetSwapchainImagesKHR(device, swapchain, &image_count, NULL);
+    vkGetSwapchainImagesKHR(vk.device, swapchain, &image_count, NULL);
     VkImage *images = (VkImage*)malloc(sizeof(VkImage) * image_count);
-    vkGetSwapchainImagesKHR(device, swapchain, &image_count, images);
+    vkGetSwapchainImagesKHR(vk.device, swapchain, &image_count, images);
 
     win->renderer.format = formats[0].format;
     win->renderer.images = images;
     win->renderer.image_count = image_count;
+    win->renderer.swapchain = swapchain;
 }
 
 void lu_create_image_views(Window *win) {
@@ -414,12 +456,23 @@ void lu_create_render_pass(Window *win) {
         .pColorAttachments = &color_attachment_ref,
     };
 
+    VkSubpassDependency dependency = {
+        .srcSubpass = VK_SUBPASS_EXTERNAL,
+        .dstSubpass = 0,
+        .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .srcAccessMask = 0,
+        .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 
+    };
+
     VkRenderPassCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
         .attachmentCount = 1,
         .pAttachments = &color_attachment,
         .subpassCount = 1,
         .pSubpasses = &subpass,
+        .dependencyCount = 1,
+        .pDependencies = &dependency,
     };
 
     VkRenderPass render_pass = {0};
@@ -614,6 +667,49 @@ void lu_create_framebuffers(Window *win) {
     win->renderer.framebuffers = framebuffers;
 }
 
+void lu_create_command_structures(Window *win) {
+    VkRenderer vk = win->renderer;
+
+    uint32_t queue_family = find_queue_family(vk.physical_device);
+
+    VkCommandPoolCreateInfo pool_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        .queueFamilyIndex = queue_family,
+    };
+
+    VkCommandPool command_pool = {0};
+    VK_CHECK(vkCreateCommandPool(vk.device, &pool_info, NULL, &command_pool));
+
+
+    VkCommandBufferAllocateInfo alloc_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool = command_pool,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1,
+    };
+
+    VkCommandBuffer command_buffer = {0};
+    VK_CHECK(vkAllocateCommandBuffers(vk.device, &alloc_info, &command_buffer));
+
+    win->renderer.command_pool = command_pool;
+    win->renderer.command_buffer = command_buffer;
+}
+
+void lu_create_sync_objs(Window *win) {
+    VkSemaphoreCreateInfo sema_info = {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+    };
+    VkFenceCreateInfo fence_info = {
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+        .flags = VK_FENCE_CREATE_SIGNALED_BIT,
+    };
+
+    VK_CHECK(vkCreateSemaphore(win->renderer.device, &sema_info, NULL, &win->renderer.acq_sema));
+    VK_CHECK(vkCreateSemaphore(win->renderer.device, &sema_info, NULL, &win->renderer.rel_sema));
+    VK_CHECK(vkCreateFence(win->renderer.device, &fence_info, NULL, &win->renderer.between_fence));
+}
+
 void lu_setup_renderer(Window *win, const char *name) {
     load_instance_proc_addr();
     VkInstance instance = lu_create_instance(name);
@@ -629,18 +725,121 @@ void lu_setup_renderer(Window *win, const char *name) {
     lu_create_device(win, &queue_family);
     device_load_vulkan(win->renderer.device);
 
-    VkQueue graphics_queue = {0};
-    vkGetDeviceQueue(win->renderer.device, queue_family, 0, &graphics_queue);
+    vkGetDeviceQueue(win->renderer.device, queue_family, 0, &win->renderer.graphics_queue);
 
     lu_create_swapchain(win);
     lu_create_image_views(win);
     lu_create_render_pass(win);
     lu_create_graphics_pipeline(win);
     lu_create_framebuffers(win);
+    lu_create_command_structures(win);
+    lu_create_sync_objs(win);
+}
+
+void lu_record_command_buffer(
+        Window *win, 
+        VkCommandBuffer command_buffer, 
+        uint32_t image_index) 
+{
+    VkCommandBufferBeginInfo begin_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = 0,
+        .pInheritanceInfo = NULL,
+    };
+
+    VK_CHECK(vkBeginCommandBuffer(command_buffer, &begin_info));
+
+    VkClearValue clear_color = {{{ 1.0f, 0.0f, 1.0f, 1.0f }}};
+
+    VkRenderPassBeginInfo render_pass_info = {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+        .renderPass = win->renderer.render_pass,
+        .framebuffer = win->renderer.framebuffers[image_index],
+        .renderArea = {
+            .offset = { 0, 0 },
+            .extent = { win->width, win->height },
+        },
+        .clearValueCount = 1,
+        .pClearValues = &clear_color,
+    };
+
+    vkCmdBeginRenderPass(command_buffer, &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
+
+    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, win->renderer.graphics_pipeline);
+
+    VkViewport viewport = {
+        .x = 0.0f,
+        .y = 0.0f,
+        .width = (float)win->width,
+        .height = (float)win->height,
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f,
+    };
+    vkCmdSetViewport(command_buffer, 0, 1, &viewport);
+
+    VkRect2D scissor = {
+        .offset = { 0, 0 },
+        .extent = {
+            .width = win->width,
+            .height = win->height,
+        },
+    };
+    vkCmdSetScissor(command_buffer, 0, 1, &scissor);
+
+    vkCmdDraw(command_buffer, 3, 1, 0, 0);
+
+    vkCmdEndRenderPass(command_buffer);
+    VK_CHECK(vkEndCommandBuffer(command_buffer));
+}
+
+void lu_draw_frame(Window *win) {
+    VkRenderer *vk = &win->renderer;
+
+    vkWaitForFences(vk->device, 1, &vk->between_fence, VK_TRUE, UINT64_MAX);
+
+    uint32_t image_index = 0;
+    vkAcquireNextImageKHR(vk->device, vk->swapchain, UINT64_MAX, vk->acq_sema, VK_NULL_HANDLE, &image_index);
+    vkResetCommandBuffer(vk->command_buffer, 0);
+    lu_record_command_buffer(win, vk->command_buffer, image_index);
+
+    VkSemaphore wait_semas[] = {vk->acq_sema};
+    VkSemaphore signal_semas[] = { vk->rel_sema };
+    VkPipelineStageFlags wait_stages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+
+    VkSubmitInfo submit_info = {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .waitSemaphoreCount = COUNT(wait_semas),
+        .pWaitSemaphores = wait_semas,
+        .pWaitDstStageMask = wait_stages,
+        .commandBufferCount = 1, 
+        .pCommandBuffers = &vk->command_buffer,
+        .signalSemaphoreCount = COUNT(signal_semas),
+        .pSignalSemaphores = signal_semas,
+    };
+
+    VK_CHECK(vkQueueSubmit(vk->graphics_queue, 1, &submit_info, vk->between_fence));
+
+    VkSwapchainKHR swapchains[] = {vk->swapchain};
+    VkPresentInfoKHR present_info = {
+        .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = signal_semas,
+        .swapchainCount = COUNT(swapchains),
+        .pSwapchains = swapchains,
+        .pImageIndices = &image_index,
+    };
+
+    vkQueuePresentKHR(vk->graphics_queue, &present_info);
+
+    vkResetFences(vk->device, 1, &vk->between_fence);
 }
 
 void lu_free_renderer(Window *win) {
     VkRenderer vk = win->renderer;
+
+    vkDestroySemaphore(vk.device, vk.acq_sema, NULL);
+    vkDestroySemaphore(vk.device, vk.rel_sema, NULL);
+    vkDestroyFence(vk.device, vk.between_fence, NULL);
 
     for (uint32_t i = 0; i < vk.image_count; i++) {
         vkDestroyImageView(vk.device, vk.image_views[i], NULL);
@@ -653,6 +852,7 @@ void lu_free_renderer(Window *win) {
     // TODO: ifdef debug
     vkDestroyDebugReportCallbackEXT(vk.instance, vk.callback, NULL);
 
+    vkDestroyCommandPool(vk.device, vk.command_pool, NULL);
     vkDestroyPipeline(vk.device, vk.graphics_pipeline, NULL);
     vkDestroyPipelineLayout(vk.device, vk.pipeline_layout, NULL);
     vkDestroyRenderPass(vk.device, vk.render_pass, NULL);
