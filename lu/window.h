@@ -42,7 +42,6 @@ typedef struct VkRenderer {
 } VkRenderer;
 
 typedef struct Window {
-    struct wl_shm *shm;
     struct wl_display *display;
     struct wl_registry *registry;
     struct wl_compositor *compositor;
@@ -59,7 +58,7 @@ typedef struct Window {
 } Window;
 
 Window *lu_create_window(const char *title, uint16_t width, uint16_t height);
-int     lu_poll_events(Window *win);
+void    lu_poll_events(Window *win);
 void    lu_terminate(Window *win);
 
 #endif /* LU_WINDOW_H */

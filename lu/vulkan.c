@@ -61,6 +61,7 @@ PFN_vkQueueSubmit vkQueueSubmit;
 PFN_vkWaitForFences vkWaitForFences;
 PFN_vkResetFences vkResetFences;
 PFN_vkQueuePresentKHR vkQueuePresentKHR;
+PFN_vkDeviceWaitIdle vkDeviceWaitIdle;
 
 
 void load_instance_proc_addr() {
@@ -145,6 +146,7 @@ void device_load_vulkan(VkDevice device) {
     vkWaitForFences = (PFN_vkWaitForFences)device_loader(device, "vkWaitForFences");
     vkResetFences = (PFN_vkResetFences)device_loader(device, "vkResetFences");
     vkQueuePresentKHR = (PFN_vkQueuePresentKHR)device_loader(device, "vkQueuePresentKHR");
+    vkDeviceWaitIdle = (PFN_vkDeviceWaitIdle)device_loader(device, "vkDeviceWaitIdle");
 }
 
 bool validation_layers_are_available() {
@@ -749,7 +751,7 @@ void lu_record_command_buffer(
 
     VK_CHECK(vkBeginCommandBuffer(command_buffer, &begin_info));
 
-    VkClearValue clear_color = {{{ 1.0f, 0.0f, 1.0f, 1.0f }}};
+    VkClearValue clear_color = {{{ 1.0f, 0.0f, 0.0f, 1.0f }}};
 
     VkRenderPassBeginInfo render_pass_info = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
@@ -796,9 +798,11 @@ void lu_draw_frame(Window *win) {
     VkRenderer *vk = &win->renderer;
 
     vkWaitForFences(vk->device, 1, &vk->between_fence, VK_TRUE, UINT64_MAX);
+    vkResetFences(vk->device, 1, &vk->between_fence);
 
     uint32_t image_index = 0;
     vkAcquireNextImageKHR(vk->device, vk->swapchain, UINT64_MAX, vk->acq_sema, VK_NULL_HANDLE, &image_index);
+
     vkResetCommandBuffer(vk->command_buffer, 0);
     lu_record_command_buffer(win, vk->command_buffer, image_index);
 
@@ -830,13 +834,12 @@ void lu_draw_frame(Window *win) {
     };
 
     vkQueuePresentKHR(vk->graphics_queue, &present_info);
-
-    vkResetFences(vk->device, 1, &vk->between_fence);
 }
 
 void lu_free_renderer(Window *win) {
     VkRenderer vk = win->renderer;
 
+    VK_CHECK(vkDeviceWaitIdle(vk.device));
     vkDestroySemaphore(vk.device, vk.acq_sema, NULL);
     vkDestroySemaphore(vk.device, vk.rel_sema, NULL);
     vkDestroyFence(vk.device, vk.between_fence, NULL);

@@ -7,14 +7,6 @@ static void xdg_surface_configure(
         uint32_t serial)
 {
     xdg_surface_ack_configure(xdg_surface, serial);
-
-    printf("surface is ready for the next frame\n");
-
-    /*
-    struct wl_buffer *buffer = draw_frame(win);
-    wl_surface_attach(win->surface, buffer, 0, 0);
-    wl_surface_commit(win->surface);
-    */
 }
 
 static const struct xdg_surface_listener xdg_surface_listener = {
@@ -31,10 +23,13 @@ static void xdg_toplevel_configure(
     if (width == 0 || height == 0) return;
 
     Window *win = data;
-    win->width = width;
-    win->height = height;
+    // TODO: set resizable in xdg_surface_configure to know that compositor is ready
+    // and add swapchain deletion and recreation
 
-    // TODO: update vulkan surface as well
+    //win->width = width;
+    //win->height = height;
+
+    // TODO: update vulkan swapchain as well
 }
 
 static void xdg_toplevel_close(
@@ -70,10 +65,7 @@ static void registry_global(
 {
     Window *window = data;
 
-    if        (strcmp(interface, wl_shm_interface.name) == 0) {
-        // TODO: use linux dmabuf
-        window->shm = wl_registry_bind(wl_registry, name, &wl_shm_interface, 1);
-    } else if (strcmp(interface, wl_compositor_interface.name) == 0) {
+    if        (strcmp(interface, wl_compositor_interface.name) == 0) {
         window->compositor = wl_registry_bind(wl_registry, name, &wl_compositor_interface, 4);
     } else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
         window->xdg_wm_base = wl_registry_bind(wl_registry, name, &xdg_wm_base_interface, 1);
@@ -126,8 +118,8 @@ Window *lu_create_window(
     return win;
 }
 
-int lu_poll_events(Window *win) {
-    return wl_display_dispatch(win->display);
+void lu_poll_events(Window *win) {
+    wl_display_dispatch(win->display);
 }
 
 void lu_terminate(Window *win) {

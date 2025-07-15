@@ -4,7 +4,7 @@
 int main(void) {
     Window *win = lu_create_window("hello", 640, 480);
 
-    while (lu_poll_events(win)) {
+    while (true) {
         lu_draw_frame(win);
     }
 
