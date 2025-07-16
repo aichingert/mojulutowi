@@ -25,11 +25,9 @@ typedef struct VkRenderer {
     VkSwapchainKHR  swapchain;
     VkImage         *images;
     VkImageView     *image_views;
-    VkFramebuffer   *framebuffers;
     u32             image_count;
 
     VkQueue             graphics_queue;
-    VkRenderPass        render_pass;
     VkPipelineLayout    pipeline_layout;
     VkPipeline          graphics_pipeline;
 

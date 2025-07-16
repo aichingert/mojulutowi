@@ -20,6 +20,9 @@ PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR vkGetPhysicalDeviceSurfaceCapabili
 PFN_vkDestroyDebugReportCallbackEXT vkDestroyDebugReportCallbackEXT;
 PFN_vkDestroySurfaceKHR vkDestroySurfaceKHR;
 PFN_vkDestroyInstance vkDestroyInstance;
+PFN_vkCmdBeginRenderingKHR vkCmdBeginRenderingKHR;
+PFN_vkCmdEndRenderingKHR vkCmdEndRenderingKHR;
+PFN_vkEnumerateDeviceExtensionProperties vkEnumerateDeviceExtensionProperties;
 
 static PFN_vkGetDeviceProcAddr device_loader = NULL;
 
@@ -34,22 +37,16 @@ PFN_vkCreateShaderModule vkCreateShaderModule;
 PFN_vkDestroyShaderModule vkDestroyShaderModule;
 PFN_vkCreatePipelineLayout vkCreatePipelineLayout;
 PFN_vkDestroyPipelineLayout vkDestroyPipelineLayout;
-PFN_vkCreateRenderPass vkCreateRenderPass;
-PFN_vkDestroyRenderPass vkDestroyRenderPass;
 PFN_vkCreateGraphicsPipelines vkCreateGraphicsPipelines;
 PFN_vkDestroyPipeline vkDestroyPipeline;
-PFN_vkCreateFramebuffer vkCreateFramebuffer;
-PFN_vkDestroyFramebuffer vkDestroyFramebuffer;
 PFN_vkCreateCommandPool vkCreateCommandPool;
 PFN_vkAllocateCommandBuffers vkAllocateCommandBuffers;
 PFN_vkDestroyCommandPool vkDestroyCommandPool;
 PFN_vkBeginCommandBuffer vkBeginCommandBuffer;
-PFN_vkCmdBeginRenderPass vkCmdBeginRenderPass;
 PFN_vkCmdBindPipeline vkCmdBindPipeline;
 PFN_vkCmdSetViewport vkCmdSetViewport;
 PFN_vkCmdSetScissor vkCmdSetScissor;
 PFN_vkCmdDraw vkCmdDraw;
-PFN_vkCmdEndRenderPass vkCmdEndRenderPass;
 PFN_vkEndCommandBuffer vkEndCommandBuffer;
 PFN_vkCreateSemaphore vkCreateSemaphore;
 PFN_vkDestroySemaphore vkDestroySemaphore;
@@ -61,6 +58,7 @@ PFN_vkQueueSubmit vkQueueSubmit;
 PFN_vkWaitForFences vkWaitForFences;
 PFN_vkResetFences vkResetFences;
 PFN_vkQueuePresentKHR vkQueuePresentKHR;
+PFN_vkCmdPipelineBarrier vkCmdPipelineBarrier;
 PFN_vkDeviceWaitIdle vkDeviceWaitIdle;
 
 
@@ -105,6 +103,16 @@ void instance_load_vulkan(VkInstance instance) {
         (PFN_vkDestroyDebugReportCallbackEXT)loader(instance, "vkDestroyDebugReportCallbackEXT");
     vkDestroySurfaceKHR = (PFN_vkDestroySurfaceKHR)loader(instance, "vkDestroySurfaceKHR");
     vkDestroyInstance = (PFN_vkDestroyInstance)loader(instance, "vkDestroyInstance");
+    vkEnumerateDeviceExtensionProperties = (PFN_vkEnumerateDeviceExtensionProperties)loader(instance, "vkEnumerateDeviceExtensionProperties");
+
+    vkCmdBeginRenderingKHR = (PFN_vkCmdBeginRenderingKHR)
+        loader(instance, "vkCmdBeginRenderingKHR");
+    vkCmdEndRenderingKHR   = (PFN_vkCmdEndRenderingKHR) 
+        loader(instance, "vkCmdEndRenderingKHR");
+
+    if (!vkCmdBeginRenderingKHR || !vkCmdEndRenderingKHR) {
+        assert(!"unable to load function pointers for dynamic rendering!");
+    }
 }
 
 void device_load_vulkan(VkDevice device) {
@@ -119,22 +127,16 @@ void device_load_vulkan(VkDevice device) {
     vkDestroyShaderModule = (PFN_vkDestroyShaderModule)device_loader(device, "vkDestroyShaderModule");
     vkCreatePipelineLayout = (PFN_vkCreatePipelineLayout)device_loader(device, "vkCreatePipelineLayout");
     vkDestroyPipelineLayout = (PFN_vkDestroyPipelineLayout)device_loader(device, "vkDestroyPipelineLayout");
-    vkCreateRenderPass = (PFN_vkCreateRenderPass)device_loader(device, "vkCreateRenderPass");
-    vkDestroyRenderPass = (PFN_vkDestroyRenderPass)device_loader(device, "vkDestroyRenderPass");
     vkCreateGraphicsPipelines = (PFN_vkCreateGraphicsPipelines)device_loader(device, "vkCreateGraphicsPipelines");
     vkDestroyPipeline = (PFN_vkDestroyPipeline)device_loader(device, "vkDestroyPipeline");
-    vkCreateFramebuffer = (PFN_vkCreateFramebuffer)device_loader(device, "vkCreateFramebuffer");
-    vkDestroyFramebuffer = (PFN_vkDestroyFramebuffer)device_loader(device, "vkDestroyFramebuffer");
     vkCreateCommandPool = (PFN_vkCreateCommandPool)device_loader(device, "vkCreateCommandPool");
     vkAllocateCommandBuffers = (PFN_vkAllocateCommandBuffers)device_loader(device, "vkAllocateCommandBuffers");
     vkDestroyCommandPool = (PFN_vkDestroyCommandPool)device_loader(device, "vkDestroyCommandPool");
     vkBeginCommandBuffer = (PFN_vkBeginCommandBuffer)device_loader(device, "vkBeginCommandBuffer");
-    vkCmdBeginRenderPass = (PFN_vkCmdBeginRenderPass)device_loader(device, "vkCmdBeginRenderPass");
     vkCmdBindPipeline = (PFN_vkCmdBindPipeline)device_loader(device, "vkCmdBindPipeline");
     vkCmdSetViewport = (PFN_vkCmdSetViewport)device_loader(device, "vkCmdSetViewport");
     vkCmdSetScissor = (PFN_vkCmdSetScissor)device_loader(device, "vkCmdSetScissor");
     vkCmdDraw = (PFN_vkCmdDraw)device_loader(device, "vkCmdDraw");
-    vkCmdEndRenderPass = (PFN_vkCmdEndRenderPass)device_loader(device, "vkCmdEndRenderPass");
     vkEndCommandBuffer = (PFN_vkEndCommandBuffer)device_loader(device, "vkEndCommandBuffer");
     vkCreateSemaphore = (PFN_vkCreateSemaphore)device_loader(device, "vkCreateSemaphore");
     vkDestroySemaphore = (PFN_vkDestroySemaphore)device_loader(device, "vkDestroySemaphore");
@@ -146,6 +148,7 @@ void device_load_vulkan(VkDevice device) {
     vkWaitForFences = (PFN_vkWaitForFences)device_loader(device, "vkWaitForFences");
     vkResetFences = (PFN_vkResetFences)device_loader(device, "vkResetFences");
     vkQueuePresentKHR = (PFN_vkQueuePresentKHR)device_loader(device, "vkQueuePresentKHR");
+    vkCmdPipelineBarrier = (PFN_vkCmdPipelineBarrier)device_loader(device, "vkCmdPipelineBarrier");
     vkDeviceWaitIdle = (PFN_vkDeviceWaitIdle)device_loader(device, "vkDeviceWaitIdle");
 }
 
@@ -282,6 +285,7 @@ void pick_suitable_device(Window *win) {
     VkPhysicalDevice fallback = VK_NULL_HANDLE;
     vkEnumeratePhysicalDevices(instance, &device_count, devices);
 
+    // TODO: this should probably become it's own function
     for (u32 i = 0; i < device_count; i++) {
         u32 queue_family = find_queue_family(devices[i]);
         if (queue_family == 10020002) continue;
@@ -297,6 +301,22 @@ void pick_suitable_device(Window *win) {
 
         VkPhysicalDeviceProperties device_properties;
         VkPhysicalDeviceFeatures   device_features;
+        u32 property_count = 0;
+
+        vkEnumerateDeviceExtensionProperties(devices[i], NULL, &property_count, NULL);
+        VkExtensionProperties ext_props[property_count] = {};
+        vkEnumerateDeviceExtensionProperties(devices[i], NULL, &property_count, ext_props);
+
+        supported = false;
+
+        for (u32 i = 0; i < property_count; i++) {
+            if (strcmp("VK_KHR_dynamic_rendering", ext_props[i].extensionName) == 0) {
+                supported = true;
+                break;
+            }
+        }
+
+        if (!supported) continue;
 
         vkGetPhysicalDeviceProperties(devices[i], &device_properties);
         vkGetPhysicalDeviceFeatures(devices[i], &device_features);
@@ -334,10 +354,20 @@ void lu_create_device(Window *win, u32 *queue_family) {
 
     VkPhysicalDeviceFeatures device_features = {0};
 
-    const char *device_extensions[] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+    const char *device_extensions[] = { 
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+        // TODO: should be a define
+        "VK_KHR_dynamic_rendering",
+    };
+
+    VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamic_rendering_feature = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR,
+        .dynamicRendering = VK_TRUE,
+    };
 
     VkDeviceCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+        .pNext = &dynamic_rendering_feature,
         .queueCreateInfoCount       = 1,
         .pQueueCreateInfos          = &queue_create_info,
         .pEnabledFeatures           = &device_features,
@@ -435,42 +465,17 @@ void lu_create_image_views(Window *win) {
     win->renderer.image_views = image_views;
 }
 
-void lu_create_framebuffers(Window *win) {
-    VkRenderer vk = win->renderer;
-    VkFramebuffer *framebuffers = (VkFramebuffer*)malloc(sizeof(VkFramebuffer) * vk.image_count);
-
-    for(u32 i = 0; i < vk.image_count; i++) {
-        VkImageView attachments[] = {vk.image_views[i]};
-
-        VkFramebufferCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-            .renderPass = vk.render_pass,
-            .attachmentCount = 1,
-            .pAttachments = attachments,
-            .width = win->width,
-            .height = win->height,
-            .layers = 1,
-        };
-
-        VK_CHECK(vkCreateFramebuffer(vk.device, &create_info, NULL, &framebuffers[i]));
-    }
-
-    win->renderer.framebuffers = framebuffers;
-}
-
 void lu_destroy_swapchain(Window *win) {
     VkRenderer *vk = &win->renderer;
 
     VK_CHECK(vkDeviceWaitIdle(vk->device));
 
     for (u32 i = 0; i < vk->image_count; i++) {
-        vkDestroyFramebuffer(vk->device, vk->framebuffers[i], NULL);
         vkDestroyImageView(vk->device, vk->image_views[i], NULL);
     }
 
     free(vk->images);
     free(vk->image_views);
-    free(vk->framebuffers);
     vkDestroySwapchainKHR(vk->device, vk->swapchain, NULL);
 }
 
@@ -480,56 +485,6 @@ void lu_recreate_swapchain(Window *win) {
 
     lu_create_swapchain(win);
     lu_create_image_views(win);
-    lu_create_framebuffers(win);
-}
-
-void lu_create_render_pass(Window *win) {
-    VkRenderer vk = win->renderer;
-
-    VkAttachmentDescription color_attachment = {
-        .format = vk.format,
-        .samples = VK_SAMPLE_COUNT_1_BIT,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-    };
-
-    VkAttachmentReference color_attachment_ref = {
-        .attachment = 0,
-        .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-    };
-
-    VkSubpassDescription subpass = { 
-        .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-        .colorAttachmentCount = 1,
-        .pColorAttachments = &color_attachment_ref,
-    };
-
-    VkSubpassDependency dependency = {
-        .srcSubpass = VK_SUBPASS_EXTERNAL,
-        .dstSubpass = 0,
-        .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        .srcAccessMask = 0,
-        .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 
-    };
-
-    VkRenderPassCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-        .attachmentCount = 1,
-        .pAttachments = &color_attachment,
-        .subpassCount = 1,
-        .pSubpasses = &subpass,
-        .dependencyCount = 1,
-        .pDependencies = &dependency,
-    };
-
-    VkRenderPass render_pass = {0};
-    VK_CHECK(vkCreateRenderPass(win->renderer.device, &create_info, NULL, &render_pass));
-    win->renderer.render_pass = render_pass;
 }
 
 VkShaderModule lu_create_shader_module(VkDevice device, const char *shader) {
@@ -672,8 +627,15 @@ void lu_create_graphics_pipeline(Window *win) {
     VkPipelineLayout layout;
     VK_CHECK(vkCreatePipelineLayout(vk.device, &pipeline_layout_info, NULL, &layout));
 
+    VkPipelineRenderingCreateInfoKHR pipeline_rendering_info = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR,
+        .colorAttachmentCount = 1,
+        .pColorAttachmentFormats = &vk.format,
+    };
+
     VkGraphicsPipelineCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+        .pNext = &pipeline_rendering_info,
         .stageCount = COUNT(shader_stages),
         .pStages = shader_stages,
         .pVertexInputState = &vertex_input_info,
@@ -685,8 +647,6 @@ void lu_create_graphics_pipeline(Window *win) {
         .pColorBlendState = &color_blending,
         .pDynamicState = &dynamic_state,
         .layout = layout,
-        .renderPass = vk.render_pass,
-        .subpass = 0,
     };
 
     VkPipeline graphics_pipeline = {0};
@@ -758,9 +718,7 @@ void lu_setup_renderer(Window *win, const char *name) {
 
     lu_create_swapchain(win);
     lu_create_image_views(win);
-    lu_create_render_pass(win);
     lu_create_graphics_pipeline(win);
-    lu_create_framebuffers(win);
     lu_create_command_structures(win);
     lu_create_sync_objs(win);
 }
@@ -778,22 +736,53 @@ void lu_record_command_buffer(
 
     VK_CHECK(vkBeginCommandBuffer(command_buffer, &begin_info));
 
+    // TODO: research some fields more
+    VkImageMemoryBarrier image_to_draw_barrier = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .image = win->renderer.images[image_index],
+        .subresourceRange = {
+          .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+          .baseMipLevel = 0,
+          .levelCount = 1,
+          .baseArrayLayer = 0,
+          .layerCount = 1,
+        }
+    };
+    vkCmdPipelineBarrier(
+        command_buffer,
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        0, 0, NULL, 0, NULL, 1,
+        &image_to_draw_barrier
+    );
+
     VkClearValue clear_color = {{{ 0x18 / 255.0f, 0x16 / 255.0f, 0x16 / 255.0f, 1.0f }}};
 
-    VkRenderPassBeginInfo render_pass_info = {
-        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        .renderPass = win->renderer.render_pass,
-        .framebuffer = win->renderer.framebuffers[image_index],
+    VkRenderingAttachmentInfoKHR color_attachment_info = {
+        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR,
+        .imageView = win->renderer.image_views[image_index],
+        .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .clearValue = clear_color,
+    };
+
+    VkRenderingInfoKHR rendering_info = {
+        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR,
         .renderArea = {
             .offset = { 0, 0 },
             // TODO: might have to think about this
             .extent = { win->width, win->height },
         },
-        .clearValueCount = 1,
-        .pClearValues = &clear_color,
+        .layerCount = 1,
+        .colorAttachmentCount = 1,
+        .pColorAttachments = &color_attachment_info,
     };
 
-    vkCmdBeginRenderPass(command_buffer, &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdBeginRenderingKHR(command_buffer, &rendering_info);
 
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, win->renderer.graphics_pipeline);
 
@@ -816,7 +805,30 @@ void lu_record_command_buffer(
 
     vkCmdDraw(command_buffer, 3, 1, 0, 0);
 
-    vkCmdEndRenderPass(command_buffer);
+    vkCmdEndRenderingKHR(command_buffer);
+
+    VkImageMemoryBarrier image_memory_barrier = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        .image = win->renderer.images[image_index],
+        .subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1,
+        },
+    };
+
+    vkCmdPipelineBarrier(
+        command_buffer, 
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+        0, 0, NULL, 0, NULL, 1,
+        &image_memory_barrier
+    );
     VK_CHECK(vkEndCommandBuffer(command_buffer));
 }
 
@@ -883,7 +895,6 @@ void lu_free_renderer(Window *win) {
     vkDestroyCommandPool(vk->device, vk->command_pool, NULL);
     vkDestroyPipeline(vk->device, vk->graphics_pipeline, NULL);
     vkDestroyPipelineLayout(vk->device, vk->pipeline_layout, NULL);
-    vkDestroyRenderPass(vk->device, vk->render_pass, NULL);
     vkDestroyDevice(vk->device, NULL);
     vkDestroySurfaceKHR(vk->instance, vk->surface, NULL);
     vkDestroyInstance(vk->instance, NULL);
