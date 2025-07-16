@@ -12,6 +12,8 @@
 #define VK_USE_PLATFORM_WAYLAND_KHR
 #include <vulkan/vulkan.h>
 
+#define MAX_FRAMES_BETWEEN 2
+
 typedef struct VkRenderer {
     VkInstance instance;
     VkSurfaceKHR surface;
@@ -31,11 +33,13 @@ typedef struct VkRenderer {
     VkPipeline          graphics_pipeline;
 
     VkCommandPool   command_pool;
-    VkCommandBuffer command_buffer;
+    VkCommandBuffer command_buffers[MAX_FRAMES_BETWEEN];
 
-    VkSemaphore acq_sema;
-    VkSemaphore rel_sema;
-    VkFence between_fence;
+    VkSemaphore acq_semas[MAX_FRAMES_BETWEEN];
+    VkSemaphore rel_semas[MAX_FRAMES_BETWEEN];
+    VkFence between_fences[MAX_FRAMES_BETWEEN];
+
+    uint32_t current_frame;
 
     // TODO: ifdef debug
     VkDebugReportCallbackEXT callback;
@@ -62,7 +66,7 @@ enum WindowFlags {
     WINDOW_CLOSE_BIT = 1 << (0),
 };
 
-Window *lu_create_window(const char *title, uint16_t width, uint16_t height);
+Window  *lu_create_window(const char *title, uint16_t width, uint16_t height);
 bool    lu_window_should_close(Window *win);
 void    lu_poll_events(Window *win);
 void    lu_terminate(Window *win);

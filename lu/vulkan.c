@@ -364,6 +364,7 @@ void lu_create_swapchain(Window *win) {
     VkSurfaceCapabilitiesKHR capabilities = {0};
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vk.physical_device, vk.surface, &capabilities);
 
+    // TODO: might have to think about this
     VkExtent2D extent = {
         .width = win->width,
         .height = win->height,
@@ -614,6 +615,7 @@ void lu_create_graphics_pipeline(Window *win) {
     };
     VkRect2D scissor = {
         .offset = {0, 0},
+        // TODO: might have to think about this
         .extent = { .width = win->width, .height = win->height },
     };
 
@@ -698,9 +700,9 @@ void lu_create_graphics_pipeline(Window *win) {
 }
 
 void lu_create_command_structures(Window *win) {
-    VkRenderer vk = win->renderer;
+    VkRenderer *vk = &win->renderer;
 
-    uint32_t queue_family = find_queue_family(vk.physical_device);
+    uint32_t queue_family = find_queue_family(vk->physical_device);
 
     VkCommandPoolCreateInfo pool_info = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -708,22 +710,16 @@ void lu_create_command_structures(Window *win) {
         .queueFamilyIndex = queue_family,
     };
 
-    VkCommandPool command_pool = {0};
-    VK_CHECK(vkCreateCommandPool(vk.device, &pool_info, NULL, &command_pool));
-
+    VK_CHECK(vkCreateCommandPool(vk->device, &pool_info, NULL, &vk->command_pool));
 
     VkCommandBufferAllocateInfo alloc_info = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .commandPool = command_pool,
+        .commandPool = vk->command_pool,
         .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandBufferCount = 1,
+        .commandBufferCount = MAX_FRAMES_BETWEEN,
     };
 
-    VkCommandBuffer command_buffer = {0};
-    VK_CHECK(vkAllocateCommandBuffers(vk.device, &alloc_info, &command_buffer));
-
-    win->renderer.command_pool = command_pool;
-    win->renderer.command_buffer = command_buffer;
+    VK_CHECK(vkAllocateCommandBuffers(vk->device, &alloc_info, vk->command_buffers));
 }
 
 void lu_create_sync_objs(Window *win) {
@@ -735,9 +731,12 @@ void lu_create_sync_objs(Window *win) {
         .flags = VK_FENCE_CREATE_SIGNALED_BIT,
     };
 
-    VK_CHECK(vkCreateSemaphore(win->renderer.device, &sema_info, NULL, &win->renderer.acq_sema));
-    VK_CHECK(vkCreateSemaphore(win->renderer.device, &sema_info, NULL, &win->renderer.rel_sema));
-    VK_CHECK(vkCreateFence(win->renderer.device, &fence_info, NULL, &win->renderer.between_fence));
+    VkRenderer *vk = &win->renderer;
+    for (uint32_t i = 0; i < MAX_FRAMES_BETWEEN; i++) {
+        VK_CHECK(vkCreateSemaphore(vk->device, &sema_info, NULL, &vk->acq_semas[i]));
+        VK_CHECK(vkCreateSemaphore(vk->device, &sema_info, NULL, &vk->rel_semas[i]));
+        VK_CHECK(vkCreateFence(vk->device, &fence_info, NULL, &vk->between_fences[i]));
+    }
 }
 
 void lu_setup_renderer(Window *win, const char *name) {
@@ -747,6 +746,7 @@ void lu_setup_renderer(Window *win, const char *name) {
 
     win->renderer.callback = register_debug_callback(instance);
     win->renderer.instance = instance;
+    win->renderer.current_frame = 0;
 
     lu_create_surface(win);
     pick_suitable_device(win);
@@ -779,7 +779,7 @@ void lu_record_command_buffer(
 
     VK_CHECK(vkBeginCommandBuffer(command_buffer, &begin_info));
 
-    VkClearValue clear_color = {{{ 1.0f, 0.0f, 0.0f, 1.0f }}};
+    VkClearValue clear_color = {{{ 0x18 / 255.0f, 0x16 / 255.0f, 0x16 / 255.0f, 1.0f }}};
 
     VkRenderPassBeginInfo render_pass_info = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
@@ -787,6 +787,7 @@ void lu_record_command_buffer(
         .framebuffer = win->renderer.framebuffers[image_index],
         .renderArea = {
             .offset = { 0, 0 },
+            // TODO: might have to think about this
             .extent = { win->width, win->height },
         },
         .clearValueCount = 1,
@@ -809,10 +810,8 @@ void lu_record_command_buffer(
 
     VkRect2D scissor = {
         .offset = { 0, 0 },
-        .extent = {
-            .width = win->width,
-            .height = win->height,
-        },
+        // TODO: have to think about this
+        .extent = { .width = win->width, .height = win->height },
     };
     vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
@@ -824,18 +823,19 @@ void lu_record_command_buffer(
 
 void lu_draw_frame(Window *win) {
     VkRenderer *vk = &win->renderer;
+    uint32_t frame = vk->current_frame;
 
-    vkWaitForFences(vk->device, 1, &vk->between_fence, VK_TRUE, UINT64_MAX);
-    vkResetFences(vk->device, 1, &vk->between_fence);
+    vkWaitForFences(vk->device, 1, &vk->between_fences[frame], VK_TRUE, UINT64_MAX);
+    vkResetFences(vk->device, 1, &vk->between_fences[frame]);
 
     uint32_t image_index = 0;
-    vkAcquireNextImageKHR(vk->device, vk->swapchain, UINT64_MAX, vk->acq_sema, VK_NULL_HANDLE, &image_index);
+    vkAcquireNextImageKHR(vk->device, vk->swapchain, UINT64_MAX, vk->acq_semas[frame], VK_NULL_HANDLE, &image_index);
 
-    vkResetCommandBuffer(vk->command_buffer, 0);
-    lu_record_command_buffer(win, vk->command_buffer, image_index);
+    vkResetCommandBuffer(vk->command_buffers[frame], 0);
+    lu_record_command_buffer(win, vk->command_buffers[frame], image_index);
 
-    VkSemaphore wait_semas[] = {vk->acq_sema};
-    VkSemaphore signal_semas[] = { vk->rel_sema };
+    VkSemaphore wait_semas[] = {vk->acq_semas[frame]};
+    VkSemaphore signal_semas[] = { vk->rel_semas[frame] };
     VkPipelineStageFlags wait_stages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 
     VkSubmitInfo submit_info = {
@@ -844,12 +844,12 @@ void lu_draw_frame(Window *win) {
         .pWaitSemaphores = wait_semas,
         .pWaitDstStageMask = wait_stages,
         .commandBufferCount = 1, 
-        .pCommandBuffers = &vk->command_buffer,
+        .pCommandBuffers = &vk->command_buffers[frame],
         .signalSemaphoreCount = COUNT(signal_semas),
         .pSignalSemaphores = signal_semas,
     };
 
-    VK_CHECK(vkQueueSubmit(vk->graphics_queue, 1, &submit_info, vk->between_fence));
+    VK_CHECK(vkQueueSubmit(vk->graphics_queue, 1, &submit_info, vk->between_fences[frame]));
 
     VkSwapchainKHR swapchains[] = {vk->swapchain};
     VkPresentInfoKHR present_info = {
@@ -862,6 +862,7 @@ void lu_draw_frame(Window *win) {
     };
 
     vkQueuePresentKHR(vk->graphics_queue, &present_info);
+    vk->current_frame = (frame + 1) % MAX_FRAMES_BETWEEN;
 }
 
 void lu_free_renderer(Window *win) {
@@ -869,9 +870,11 @@ void lu_free_renderer(Window *win) {
 
     lu_destroy_swapchain(win);
 
-    vkDestroySemaphore(vk->device, vk->acq_sema, NULL);
-    vkDestroySemaphore(vk->device, vk->rel_sema, NULL);
-    vkDestroyFence(vk->device, vk->between_fence, NULL);
+    for (uint32_t i = 0; i < MAX_FRAMES_BETWEEN; i++) {
+        vkDestroySemaphore(vk->device, vk->acq_semas[i], NULL);
+        vkDestroySemaphore(vk->device, vk->rel_semas[i], NULL);
+        vkDestroyFence(vk->device, vk->between_fences[i], NULL);
+    }
 
     // TODO: ifdef debug
     if (vkCreateDebugReportCallbackEXT) {
