@@ -51,13 +51,19 @@ typedef struct Window {
     struct xdg_surface *xdg_surface;
     struct xdg_toplevel *xdg_toplevel;
 
+    uint8_t flags;
     int32_t width;
     int32_t height;
 
     VkRenderer renderer;
 } Window;
 
+enum WindowFlags {
+    WINDOW_CLOSE_BIT = 1 << (0),
+};
+
 Window *lu_create_window(const char *title, uint16_t width, uint16_t height);
+bool    lu_window_should_close(Window *win);
 void    lu_poll_events(Window *win);
 void    lu_terminate(Window *win);
 

@@ -187,8 +187,9 @@ static VkBool32 VKAPI_CALL debug_callback(
 }
 
 VkDebugReportCallbackEXT register_debug_callback(VkInstance instance) {
-    if (!vkCreateDebugReportCallbackEXT)
+    if (!vkCreateDebugReportCallbackEXT) {
 		return NULL;
+    }
 
 	VkDebugReportCallbackCreateInfoEXT create_info = { 
         .sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT,
@@ -198,8 +199,9 @@ VkDebugReportCallbackEXT register_debug_callback(VkInstance instance) {
         .pfnCallback = debug_callback,
     };
 
-	VkDebugReportCallbackEXT callback = 0;
+	VkDebugReportCallbackEXT callback = {0};
 	VK_CHECK(vkCreateDebugReportCallbackEXT(instance, &create_info, 0, &callback));
+
     return callback;
 }
 
@@ -433,6 +435,54 @@ void lu_create_image_views(Window *win) {
     win->renderer.image_views = image_views;
 }
 
+void lu_create_framebuffers(Window *win) {
+    VkRenderer vk = win->renderer;
+    VkFramebuffer *framebuffers = (VkFramebuffer*)malloc(sizeof(VkFramebuffer) * vk.image_count);
+
+    for(uint32_t i = 0; i < vk.image_count; i++) {
+        VkImageView attachments[] = {vk.image_views[i]};
+
+        VkFramebufferCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+            .renderPass = vk.render_pass,
+            .attachmentCount = 1,
+            .pAttachments = attachments,
+            .width = win->width,
+            .height = win->height,
+            .layers = 1,
+        };
+
+        VK_CHECK(vkCreateFramebuffer(vk.device, &create_info, NULL, &framebuffers[i]));
+    }
+
+    win->renderer.framebuffers = framebuffers;
+}
+
+void lu_destroy_swapchain(Window *win) {
+    VkRenderer *vk = &win->renderer;
+
+    VK_CHECK(vkDeviceWaitIdle(vk->device));
+
+    for (uint32_t i = 0; i < vk->image_count; i++) {
+        vkDestroyFramebuffer(vk->device, vk->framebuffers[i], NULL);
+        vkDestroyImageView(vk->device, vk->image_views[i], NULL);
+    }
+
+    free(vk->images);
+    free(vk->image_views);
+    free(vk->framebuffers);
+    vkDestroySwapchainKHR(vk->device, vk->swapchain, NULL);
+}
+
+// TODO: might have to recreate render pass as well
+void lu_recreate_swapchain(Window *win) {
+    lu_destroy_swapchain(win);
+
+    lu_create_swapchain(win);
+    lu_create_image_views(win);
+    lu_create_framebuffers(win);
+}
+
 void lu_create_render_pass(Window *win) {
     VkRenderer vk = win->renderer;
 
@@ -506,6 +556,7 @@ VkShaderModule lu_create_shader_module(VkDevice device, const char *shader) {
 
     VkShaderModule shader_module = {0};
     VK_CHECK(vkCreateShaderModule(device, &create_info, NULL, &shader_module));
+    free(buf);
     return shader_module;
 }
 
@@ -644,29 +695,6 @@ void lu_create_graphics_pipeline(Window *win) {
     win->renderer.graphics_pipeline = graphics_pipeline;
     vkDestroyShaderModule(vk.device, vert, NULL);
     vkDestroyShaderModule(vk.device, frag, NULL);
-}
-
-void lu_create_framebuffers(Window *win) {
-    VkRenderer vk = win->renderer;
-    VkFramebuffer *framebuffers = (VkFramebuffer*)malloc(sizeof(VkFramebuffer) * vk.image_count);
-
-    for(uint32_t i = 0; i < vk.image_count; i++) {
-        VkImageView attachments[] = {vk.image_views[i]};
-
-        VkFramebufferCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-            .renderPass = vk.render_pass,
-            .attachmentCount = 1,
-            .pAttachments = attachments,
-            .width = win->width,
-            .height = win->height,
-            .layers = 1,
-        };
-
-        VK_CHECK(vkCreateFramebuffer(vk.device, &create_info, NULL, &framebuffers[i]));
-    }
-
-    win->renderer.framebuffers = framebuffers;
 }
 
 void lu_create_command_structures(Window *win) {
@@ -837,30 +865,24 @@ void lu_draw_frame(Window *win) {
 }
 
 void lu_free_renderer(Window *win) {
-    VkRenderer vk = win->renderer;
+    VkRenderer *vk = &win->renderer;
 
-    VK_CHECK(vkDeviceWaitIdle(vk.device));
-    vkDestroySemaphore(vk.device, vk.acq_sema, NULL);
-    vkDestroySemaphore(vk.device, vk.rel_sema, NULL);
-    vkDestroyFence(vk.device, vk.between_fence, NULL);
+    lu_destroy_swapchain(win);
 
-    for (uint32_t i = 0; i < vk.image_count; i++) {
-        vkDestroyImageView(vk.device, vk.image_views[i], NULL);
-    }
-
-    for (uint32_t i = 0; i < vk.image_count; i++) {
-        vkDestroyFramebuffer(vk.device, vk.framebuffers[i], NULL);
-    }
+    vkDestroySemaphore(vk->device, vk->acq_sema, NULL);
+    vkDestroySemaphore(vk->device, vk->rel_sema, NULL);
+    vkDestroyFence(vk->device, vk->between_fence, NULL);
 
     // TODO: ifdef debug
-    vkDestroyDebugReportCallbackEXT(vk.instance, vk.callback, NULL);
+    if (vkCreateDebugReportCallbackEXT) {
+        vkDestroyDebugReportCallbackEXT(vk->instance, vk->callback, NULL);
+    }
 
-    vkDestroyCommandPool(vk.device, vk.command_pool, NULL);
-    vkDestroyPipeline(vk.device, vk.graphics_pipeline, NULL);
-    vkDestroyPipelineLayout(vk.device, vk.pipeline_layout, NULL);
-    vkDestroyRenderPass(vk.device, vk.render_pass, NULL);
-    vkDestroySwapchainKHR(vk.device, vk.swapchain, NULL);
-    vkDestroyDevice(vk.device, NULL);
-    vkDestroySurfaceKHR(vk.instance, vk.surface, NULL);
-    vkDestroyInstance(vk.instance, NULL);
+    vkDestroyCommandPool(vk->device, vk->command_pool, NULL);
+    vkDestroyPipeline(vk->device, vk->graphics_pipeline, NULL);
+    vkDestroyPipelineLayout(vk->device, vk->pipeline_layout, NULL);
+    vkDestroyRenderPass(vk->device, vk->render_pass, NULL);
+    vkDestroyDevice(vk->device, NULL);
+    vkDestroySurfaceKHR(vk->instance, vk->surface, NULL);
+    vkDestroyInstance(vk->instance, NULL);
 }

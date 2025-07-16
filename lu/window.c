@@ -22,21 +22,20 @@ static void xdg_toplevel_configure(
 {
     if (width == 0 || height == 0) return;
 
+    // TODO: better to sync with compostor through surface configure callback
+
     Window *win = data;
-    // TODO: set resizable in xdg_surface_configure to know that compositor is ready
-    // and add swapchain deletion and recreation
 
-    //win->width = width;
-    //win->height = height;
-
-    // TODO: update vulkan swapchain as well
+    win->width = width;
+    win->height = height;
+    lu_recreate_swapchain(win);
 }
 
 static void xdg_toplevel_close(
         void *data,
         struct xdg_toplevel *toplevel)
 {
-    // TODO: set close = true
+    ((Window*)data)->flags |= WINDOW_CLOSE_BIT;
 }
 
 static void xdg_wm_base_ping(
@@ -118,12 +117,24 @@ Window *lu_create_window(
     return win;
 }
 
+inline bool lu_window_should_close(Window *win) {
+    return (win->flags & WINDOW_CLOSE_BIT) == WINDOW_CLOSE_BIT;
+}
+
 void lu_poll_events(Window *win) {
     wl_display_dispatch(win->display);
 }
 
 void lu_terminate(Window *win) {
     lu_free_renderer(win);
+
+    xdg_toplevel_destroy(win->xdg_toplevel);
+    xdg_surface_destroy(win->xdg_surface);
+    xdg_wm_base_destroy(win->xdg_wm_base);
+    wl_surface_destroy(win->surface);
+    wl_compositor_destroy(win->compositor);
+    wl_registry_destroy(win->registry);
+    wl_display_disconnect(win->display);
     free(win);
 }
 

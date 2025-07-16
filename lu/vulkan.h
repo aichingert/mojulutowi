@@ -24,6 +24,7 @@
 
 
 void        lu_setup_renderer(Window *, const char *);
+void        lu_recreate_swapchain(Window *);
 void        lu_draw_frame(Window *);
 void        lu_free_renderer(Window *);
 
