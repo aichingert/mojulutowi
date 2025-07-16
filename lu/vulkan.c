@@ -150,13 +150,13 @@ void device_load_vulkan(VkDevice device) {
 }
 
 bool validation_layers_are_available() {
-    uint32_t layer_count = 0;
+    u32 layer_count = 0;
     vkEnumerateInstanceLayerProperties(&layer_count, NULL);
 
     VkLayerProperties available_layers[layer_count];
     vkEnumerateInstanceLayerProperties(&layer_count, available_layers);
 
-    for (uint32_t i = 0; i < layer_count; i++) {
+    for (u32 i = 0; i < layer_count; i++) {
         if (strcmp(available_layers[i].layerName, VK_VALIDATION) == 0) return true;
     }
 
@@ -166,9 +166,9 @@ bool validation_layers_are_available() {
 static VkBool32 VKAPI_CALL debug_callback(
         VkDebugReportFlagsEXT flags, 
         VkDebugReportObjectTypeEXT object_type, 
-        uint64_t object, 
+        u64 object, 
         size_t location, 
-        int32_t message_code, 
+        s32 message_code, 
         const char* p_layer_prefix, 
         const char* p_message, 
         void* p_user_data)
@@ -251,14 +251,14 @@ void lu_create_surface(Window *win) {
     VK_CHECK(vkCreateWaylandSurfaceKHR(win->renderer.instance, &create_info, NULL, &win->renderer.surface));
 }
 
-uint32_t find_queue_family(VkPhysicalDevice device) {
-    uint32_t queue_family_count = 0;
+u32 find_queue_family(VkPhysicalDevice device) {
+    u32 queue_family_count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, NULL);
 
     VkQueueFamilyProperties queue_families[queue_family_count];
     vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, queue_families);
 
-    for (uint32_t i = 0; i < queue_family_count; i++) {
+    for (u32 i = 0; i < queue_family_count; i++) {
         if (queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
             return i;
         }
@@ -273,7 +273,7 @@ void pick_suitable_device(Window *win) {
     VkInstance instance = win->renderer.instance;
     VkSurfaceKHR surface = win->renderer.surface;
 
-    uint32_t device_count = 0;
+    u32 device_count = 0;
     vkEnumeratePhysicalDevices(instance, &device_count, NULL);
 
     assert(device_count != 0 && "Failed to find GPU with Vulkan support!");
@@ -282,14 +282,14 @@ void pick_suitable_device(Window *win) {
     VkPhysicalDevice fallback = VK_NULL_HANDLE;
     vkEnumeratePhysicalDevices(instance, &device_count, devices);
 
-    for (uint32_t i = 0; i < device_count; i++) {
-        uint32_t queue_family = find_queue_family(devices[i]);
+    for (u32 i = 0; i < device_count; i++) {
+        u32 queue_family = find_queue_family(devices[i]);
         if (queue_family == 10020002) continue;
 
         bool supported = vkGetPhysicalDeviceWaylandPresentationSupportKHR(devices[i], queue_family, win->display);
         if (!supported) continue;
 
-        uint32_t present_mode_count = 0, format_count = 0;
+        u32 present_mode_count = 0, format_count = 0;
         vkGetPhysicalDeviceSurfaceFormatsKHR(devices[i], surface, &format_count, NULL);
         vkGetPhysicalDeviceSurfacePresentModesKHR(devices[i], surface, &present_mode_count, NULL);
 
@@ -320,10 +320,10 @@ void pick_suitable_device(Window *win) {
     assert(!"No suitable physical device found!");
 }
 
-void lu_create_device(Window *win, uint32_t *queue_family) { 
+void lu_create_device(Window *win, u32 *queue_family) { 
     VkPhysicalDevice physical = win->renderer.physical_device;
     *queue_family = find_queue_family(physical);
-    float    queue_priority = 1.0f;
+    f32 queue_priority = 1.0f;
 
     VkDeviceQueueCreateInfo queue_create_info = {
         .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
@@ -350,8 +350,7 @@ void lu_create_device(Window *win, uint32_t *queue_family) {
 
 void lu_create_swapchain(Window *win) {
     VkRenderer vk = win->renderer;
-
-    uint32_t present_mode_count = 0, format_count = 0;
+    u32 present_mode_count = 0, format_count = 0;
 
     vkGetPhysicalDeviceSurfaceFormatsKHR(vk.physical_device, vk.surface, &format_count, NULL);
     VkSurfaceFormatKHR formats[format_count] = {};
@@ -370,7 +369,7 @@ void lu_create_swapchain(Window *win) {
         .height = win->height,
     };
 
-    uint32_t image_count = capabilities.minImageCount + 1;
+    u32 image_count = capabilities.minImageCount + 1;
     if (capabilities.maxImageCount > 0 && image_count > capabilities.maxImageCount) {
         image_count = capabilities.maxImageCount;
     }
@@ -409,7 +408,7 @@ void lu_create_image_views(Window *win) {
     VkRenderer vk = win->renderer;
     VkImageView *image_views = (VkImageView*)malloc(sizeof(VkImageView) * vk.image_count);
 
-    for (uint32_t i = 0; i < vk.image_count; i ++) {
+    for (u32 i = 0; i < vk.image_count; i ++) {
         VkImageViewCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
             .image = vk.images[i],
@@ -440,7 +439,7 @@ void lu_create_framebuffers(Window *win) {
     VkRenderer vk = win->renderer;
     VkFramebuffer *framebuffers = (VkFramebuffer*)malloc(sizeof(VkFramebuffer) * vk.image_count);
 
-    for(uint32_t i = 0; i < vk.image_count; i++) {
+    for(u32 i = 0; i < vk.image_count; i++) {
         VkImageView attachments[] = {vk.image_views[i]};
 
         VkFramebufferCreateInfo create_info = {
@@ -464,7 +463,7 @@ void lu_destroy_swapchain(Window *win) {
 
     VK_CHECK(vkDeviceWaitIdle(vk->device));
 
-    for (uint32_t i = 0; i < vk->image_count; i++) {
+    for (u32 i = 0; i < vk->image_count; i++) {
         vkDestroyFramebuffer(vk->device, vk->framebuffers[i], NULL);
         vkDestroyImageView(vk->device, vk->image_views[i], NULL);
     }
@@ -544,9 +543,9 @@ VkShaderModule lu_create_shader_module(VkDevice device, const char *shader) {
     long long file_size = ftell(file);
     fseek(file, 0, SEEK_SET);
 
-    size_t size = file_size / sizeof(uint8_t);
-    uint32_t *buf = (uint32_t*)malloc(file_size);
-    fread(buf, sizeof(uint32_t), size, file);
+    size_t size = file_size / sizeof(u8);
+    u32 *buf = (u32*)malloc(file_size);
+    fread(buf, sizeof(u32), size, file);
     fclose(file);
 
     VkShaderModuleCreateInfo create_info = {
@@ -608,8 +607,8 @@ void lu_create_graphics_pipeline(Window *win) {
     VkViewport viewport = {
         .x = 0.0f,
         .y = 0.0f,
-        .width = (float)win->width,
-        .height = (float)win->height,
+        .width = (f32)win->width,
+        .height = (f32)win->height,
         .minDepth = 0.0f,
         .maxDepth = 1.0f,
     };
@@ -702,7 +701,7 @@ void lu_create_graphics_pipeline(Window *win) {
 void lu_create_command_structures(Window *win) {
     VkRenderer *vk = &win->renderer;
 
-    uint32_t queue_family = find_queue_family(vk->physical_device);
+    u32 queue_family = find_queue_family(vk->physical_device);
 
     VkCommandPoolCreateInfo pool_info = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -732,7 +731,7 @@ void lu_create_sync_objs(Window *win) {
     };
 
     VkRenderer *vk = &win->renderer;
-    for (uint32_t i = 0; i < MAX_FRAMES_BETWEEN; i++) {
+    for (u32 i = 0; i < MAX_FRAMES_BETWEEN; i++) {
         VK_CHECK(vkCreateSemaphore(vk->device, &sema_info, NULL, &vk->acq_semas[i]));
         VK_CHECK(vkCreateSemaphore(vk->device, &sema_info, NULL, &vk->rel_semas[i]));
         VK_CHECK(vkCreateFence(vk->device, &fence_info, NULL, &vk->between_fences[i]));
@@ -751,7 +750,7 @@ void lu_setup_renderer(Window *win, const char *name) {
     lu_create_surface(win);
     pick_suitable_device(win);
 
-    uint32_t queue_family = 0;
+    u32 queue_family = 0;
     lu_create_device(win, &queue_family);
     device_load_vulkan(win->renderer.device);
 
@@ -769,7 +768,7 @@ void lu_setup_renderer(Window *win, const char *name) {
 void lu_record_command_buffer(
         Window *win, 
         VkCommandBuffer command_buffer, 
-        uint32_t image_index) 
+        u32 image_index) 
 {
     VkCommandBufferBeginInfo begin_info = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -801,8 +800,8 @@ void lu_record_command_buffer(
     VkViewport viewport = {
         .x = 0.0f,
         .y = 0.0f,
-        .width = (float)win->width,
-        .height = (float)win->height,
+        .width = (f32)win->width,
+        .height = (f32)win->height,
         .minDepth = 0.0f,
         .maxDepth = 1.0f,
     };
@@ -823,12 +822,12 @@ void lu_record_command_buffer(
 
 void lu_draw_frame(Window *win) {
     VkRenderer *vk = &win->renderer;
-    uint32_t frame = vk->current_frame;
+    u32 frame = vk->current_frame;
 
     vkWaitForFences(vk->device, 1, &vk->between_fences[frame], VK_TRUE, UINT64_MAX);
     vkResetFences(vk->device, 1, &vk->between_fences[frame]);
 
-    uint32_t image_index = 0;
+    u32 image_index = 0;
     vkAcquireNextImageKHR(vk->device, vk->swapchain, UINT64_MAX, vk->acq_semas[frame], VK_NULL_HANDLE, &image_index);
 
     vkResetCommandBuffer(vk->command_buffers[frame], 0);
@@ -870,7 +869,7 @@ void lu_free_renderer(Window *win) {
 
     lu_destroy_swapchain(win);
 
-    for (uint32_t i = 0; i < MAX_FRAMES_BETWEEN; i++) {
+    for (u32 i = 0; i < MAX_FRAMES_BETWEEN; i++) {
         vkDestroySemaphore(vk->device, vk->acq_semas[i], NULL);
         vkDestroySemaphore(vk->device, vk->rel_semas[i], NULL);
         vkDestroyFence(vk->device, vk->between_fences[i], NULL);

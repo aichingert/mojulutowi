@@ -4,7 +4,7 @@
 static void xdg_surface_configure(
         void *data,
         struct xdg_surface *xdg_surface,
-        uint32_t serial)
+        u32 serial)
 {
     xdg_surface_ack_configure(xdg_surface, serial);
 }
@@ -16,8 +16,8 @@ static const struct xdg_surface_listener xdg_surface_listener = {
 static void xdg_toplevel_configure(
         void *data,
         struct xdg_toplevel *xdg_toplevel,
-        int32_t width,
-        int32_t height,
+        s32 width,
+        s32 height,
         struct wl_array *states) 
 {
     if (width == 0 || height == 0) return;
@@ -41,7 +41,7 @@ static void xdg_toplevel_close(
 static void xdg_wm_base_ping(
         void *data,
         struct xdg_wm_base *xdg_wm_base,
-        uint32_t serial)
+        u32 serial)
 {
     xdg_wm_base_pong(xdg_wm_base, serial);
 }
@@ -58,9 +58,9 @@ static const struct xdg_wm_base_listener xdg_wm_base_listener = {
 static void registry_global(
         void *data, 
         struct wl_registry *wl_registry, 
-        uint32_t name, 
+        u32 name, 
         const char *interface, 
-        uint32_t version) 
+        u32 version) 
 {
     Window *window = data;
 
@@ -76,7 +76,7 @@ static void registry_global(
 static void registry_global_remove(
         void *data, 
         struct wl_registry *wl_registry, 
-        uint32_t name) 
+        u32 name) 
 {
     printf("registry global remove: name -> %d\n", name);
 }
@@ -102,11 +102,7 @@ void lu_setup_wl_window(Window *win, const char *title) {
     wl_surface_commit(win->surface);
 }
 
-Window *lu_create_window(
-        const char *title, 
-        uint16_t width, 
-        uint16_t height) 
-{
+Window *lu_create_window(const char *title, u16 width, u16 height) {
     Window *win = (Window*)malloc(sizeof(Window));
     win->width = width;
     win->height = height;
@@ -137,5 +133,4 @@ void lu_terminate(Window *win) {
     wl_display_disconnect(win->display);
     free(win);
 }
-
 

@@ -1,10 +1,11 @@
 #ifndef LU_WINDOW_H
 #define LU_WINDOW_H
 
-#include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+
+#include "lu.h"
 
 #include "xdg-shell.h"
 
@@ -25,7 +26,7 @@ typedef struct VkRenderer {
     VkImage         *images;
     VkImageView     *image_views;
     VkFramebuffer   *framebuffers;
-    uint32_t        image_count;
+    u32             image_count;
 
     VkQueue             graphics_queue;
     VkRenderPass        render_pass;
@@ -39,7 +40,7 @@ typedef struct VkRenderer {
     VkSemaphore rel_semas[MAX_FRAMES_BETWEEN];
     VkFence between_fences[MAX_FRAMES_BETWEEN];
 
-    uint32_t current_frame;
+    u32 current_frame;
 
     // TODO: ifdef debug
     VkDebugReportCallbackEXT callback;
@@ -55,9 +56,9 @@ typedef struct Window {
     struct xdg_surface *xdg_surface;
     struct xdg_toplevel *xdg_toplevel;
 
-    uint8_t flags;
-    int32_t width;
-    int32_t height;
+    u8  flags;
+    u32 width;
+    u32 height;
 
     VkRenderer renderer;
 } Window;
@@ -66,7 +67,7 @@ enum WindowFlags {
     WINDOW_CLOSE_BIT = 1 << (0),
 };
 
-Window  *lu_create_window(const char *title, uint16_t width, uint16_t height);
+Window  *lu_create_window(const char *title, u16 width, u16 height);
 bool    lu_window_should_close(Window *win);
 void    lu_poll_events(Window *win);
 void    lu_terminate(Window *win);
