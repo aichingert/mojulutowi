@@ -2,6 +2,16 @@
 
 // References: 
 // https://developer.apple.com/fonts/TrueType-Reference-Manual/RM06/Chap6.html
+// https://learn.microsoft.com/en-us/typography/opentype/spec/cmap
+
+/*
+ * shortFrac 	16-bit signed fraction
+ * Fixed 	    16.16-bit signed fixed-point number
+ * FWord 	    16-bit signed integer that describes a quantity in FUnits, the smallest measurable distance in em space.
+ * uFWord 	    16-bit unsigned integer that describes a quantity in FUnits, the smallest measurable distance in em space.
+ * F2Dot14 	    16-bit signed fixed number with the low 14 bits representing fraction.
+ * longDateTime The long internal format of a date in seconds since 12:00 midnight, January 1, 1904. It is represented as a signed 64-bit integer.
+*/
 
 #define ru16(buf, off) buf[off] << 8 | buf[off + 1]
 #define ru32(buf, off) buf[off] << 24 | buf[off + 1] << 16 | buf[off + 2] << 8 | buf[off + 3]
@@ -28,7 +38,7 @@ void lu_parse_ttf(const char *font) {
     u32 skip = sizeof(u16) * 4 + sizeof(u32);
 
     if (scaler == 0x00010000) {
-        printf("adobe\n");
+        printf("adobe - microsoft\n");
     }
 
     // table directory - table
@@ -134,7 +144,7 @@ void lu_parse_ttf(const char *font) {
         id_range_offsets[i] = ru16(buf, format4_off); format4_off += 2;
     }
 
-    u16 code_point = 0xC4;
+    u16 code_point = 'Q';
     u16 glyph_id   = 0;
 
     for (u16 i = 0; i < seg_count; i++) {
@@ -169,6 +179,79 @@ void lu_parse_ttf(const char *font) {
     printf("glyph_id: %hu - offset: %hu\n", glyph_id, glyph_id_offset);
 
     // glyf - table
+    glyf_off += (u32)glyph_id_offset;
+
+    s16 num_of_contours = (s16)ru16(buf, glyf_off); glyf_off += 2;
+    s16 x_min           = (s16)ru16(buf, glyf_off); glyf_off += 2;
+    s16 y_min           = (s16)ru16(buf, glyf_off); glyf_off += 2;
+    s16 x_max           = (s16)ru16(buf, glyf_off); glyf_off += 2;
+    s16 y_max           = (s16)ru16(buf, glyf_off); glyf_off += 2;
+
+    printf("contours: %hd\n", num_of_contours);
+    printf("y: %hd - %hd | x: %hd - %hd\n", y_min, y_max, x_min, x_max);
+
+    if (num_of_contours < 0) {
+        printf("TODO: compound glyhs are not yet supported!");
+        return;
+    }
+
+    u16 end_pts_of_contours[num_of_contours] = {};
+    for (s16 i = 0; i < num_of_contours; i++) {
+        end_pts_of_contours[i] = ru16(buf, glyf_off); glyf_off += 2;
+    }
+
+    u16 instr_len = ru16(buf, glyf_off); glyf_off += 2;
+    u8 instrs[instr_len] = {};
+
+    for (u16 i = 0; i < instr_len; i++) {
+        instrs[i] = buf[glyf_off++];
+    }
+
+    u16 variable = end_pts_of_contours[num_of_contours - 1];
+    printf("LEN: %hu\n", variable);
+    u8 flags[variable] = {};
+    s16 x_cords[variable] = {};
+    s16 y_cords[variable] = {};
+
+    const u8 REPEAT_BIT     = 0b00001000;
+    const u8 X_SHORT_VECTOR = 0b00000010;
+    const u8 Y_SHORT_VECTOR = 0b00000100;
+
+    for (u16 i = 0; i < variable; i++) {
+        u8 flag = buf[glyf_off++];
+        flags[i] = flag;
+
+        if ((flag & REPEAT_BIT) == REPEAT_BIT) {
+            u8 times = buf[glyf_off++];
+
+            for (u16 j = 1; j <= times; j++) {
+                flags[i + j] = flag;
+            }
+
+            i += times;
+        }
+    }
+
+    for (u16 i = 0; i < variable; i++) {
+        if ((flags[i] & X_SHORT_VECTOR) == X_SHORT_VECTOR) {
+            x_cords[i] = (s16)buf[glyf_off++];
+        } else {
+            x_cords[i] = (s16)ru16(buf, glyf_off); glyf_off += 2;
+        }
+    }
+    for (u16 i = 0; i < variable; i++) {
+        if ((flags[i] & Y_SHORT_VECTOR) == Y_SHORT_VECTOR) {
+            y_cords[i] = (s16)buf[glyf_off++];
+        } else {
+            y_cords[i] = (s16)ru16(buf, glyf_off); glyf_off += 2;
+        }
+    }
+
+    for (u16 i = 0; i < variable; i++) {
+        printf("x: %hu - y: %hu\n", x_cords[i], y_cords[i]);
+    }
+    
+    printf("%hu\n", end_pts_of_contours[num_of_contours - 1]);
 
     free(codes);
     free(buf);
