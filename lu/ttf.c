@@ -178,7 +178,7 @@ void lu_parse_ttf(const char *font) {
         id_range_offsets[i] = ru16(buf, format4_off); format4_off += 2;
     }
 
-    u16 code_point = 'A';
+    u16 code_point = 'Z';
     u16 glyph_id   = 0;
 
     for (u16 i = 0; i < seg_count; i++) {
@@ -238,42 +238,44 @@ void lu_parse_ttf(const char *font) {
         end_pts_of_contours[i] = ru16(buf, glyf_off); glyf_off += 2;
     }
 
+    // TODO: ignoring instructions might never use them
     u16 instr_len = ru16(buf, glyf_off); glyf_off += 2;
-    u8 instrs[instr_len] = {};
+    glyf_off += instr_len;
 
-    for (u16 i = 0; i < instr_len; i++) {
-        instrs[i] = buf[glyf_off++];
-    }
-
-    u16 variable = end_pts_of_contours[num_of_contours - 1];
-    printf("LEN: %hu\n", variable);
-    u8 flags[variable] = {};
-    s16 x_cords[variable] = {};
-    s16 y_cords[variable] = {};
+    u16 points = end_pts_of_contours[num_of_contours - 1] + 1;
+    printf("LEN: %hu\n", points);
+    u8 flags[points] = {};
+    s16 x_cords[points] = {};
+    s16 y_cords[points] = {};
 
     // TODO: more size checks
-    for (u16 i = 0; i < variable; i++) {
+    u16 i = 0;
+    while (i < points) {
         flags[i] = buf[glyf_off++];
 
         if ((flags[i] & REPEAT_FLAG) == REPEAT_FLAG) {
             u8 times = buf[glyf_off++];
 
-            for (u16 j = 1; j <= times; j++) {
-                flags[i + j] = flags[i];
+            printf("%hu - repeat: %hu - size: %hu\n", i, times, points);
+            assert(i + times < points && "ERROR: flags repeat outside flags array");
+            for (u16 j = i + 1; j <= i + times; j++) {
+                flags[j] = flags[i];
             }
 
             i += times;
         }
-    }
 
-    for (u16 i = 0; i < variable; i++) {
+        i += 1;
+    }
+    printf("flags done \n");
+
+    for (u16 i = 0; i < points; i++) {
         switch (flags[i] & (X_SHORT_VECTOR | X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR)) {
             case X_SHORT_VECTOR:
                 x_cords[i] = (s16)buf[glyf_off++] * (-1);
                 break;
             case X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR:
-                if (i == 0) x_cords[i] = 0;
-                else x_cords[i] = x_cords[i - 1];
+                x_cords[i] = 0;
                 break;
             case X_SHORT_VECTOR | X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR:
                 x_cords[i] = buf[glyf_off++];
@@ -284,16 +286,20 @@ void lu_parse_ttf(const char *font) {
         }
     }
 
-    for (u16 i = 0; i < variable; i++) {
+    for (u16 i = 0; i < points; i++) {
+        if (i == 2) {
+            printf("%08b\n", flags[i]);
+        }
         switch (flags[i] & (Y_SHORT_VECTOR | Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR)) {
             case Y_SHORT_VECTOR:
+                if (i == 2) printf("y - short\n");
                 y_cords[i] = -(s16)buf[glyf_off++];
                 break;
             case Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR:
-                if (i == 0) y_cords[i] = 0;
-                else y_cords[i] = y_cords[i - 1];
+                y_cords[i] = 0;
                 break;
             case Y_SHORT_VECTOR | Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR:
+                if (i == 2) printf("both\n");
                 y_cords[i] = buf[glyf_off++];
                 break;
             default:
@@ -305,10 +311,10 @@ void lu_parse_ttf(const char *font) {
     s16 x = 0;
     s16 y = 0;
 
-    for (u16 i = 0; i < variable; i++) {
-        printf("x: %hd - y: %hd\n", x, y);
+    for (u16 i = 0; i < points; i++) {
         x += x_cords[i];
         y += y_cords[i];
+        printf("x: %hd - y: %hd\n", x, y);
     }
     
     printf("%hu\n", end_pts_of_contours[num_of_contours - 1]);
