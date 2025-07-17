@@ -13,8 +13,15 @@
  * longDateTime The long internal format of a date in seconds since 12:00 midnight, January 1, 1904. It is represented as a signed 64-bit integer.
 */
 
-#define ru16(buf, off) buf[off] << 8 | buf[off + 1]
-#define ru32(buf, off) buf[off] << 24 | buf[off + 1] << 16 | buf[off + 2] << 8 | buf[off + 3]
+#define ru16(buf, off) ((u16)buf[off] << 8) | ((u16)buf[off + 1])
+#define ru32(buf, off) ((u32)buf[off] << 24) | ((u32)buf[off + 1] << 16) | ((u32)buf[off + 2] << 8) | ((u32)buf[off + 3])
+#define ru64(buf, off) (((u64)ru32(buf, off)) << (u64)32) | ((u64)ru32(buf, off + 4))
+
+#define REPEAT_FLAG                             0b00001000
+#define X_SHORT_VECTOR                          0b00000010
+#define Y_SHORT_VECTOR                          0b00000100
+#define X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR    0b00010000
+#define Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR    0b00100000
 
 void lu_parse_ttf(const char *font) {
     // TODO: should make custom file functions
@@ -71,9 +78,37 @@ void lu_parse_ttf(const char *font) {
     }
 
     // head - table
+    u16 maj_version = ru16(buf, head_off); head_off += 2; 
+    u16 min_version = ru16(buf, head_off); head_off += 2; 
+    u32 font_revision = ru32(buf, head_off); head_off += 4;
+    u32 check_sum = ru32(buf, head_off); head_off += 4;
+    u32 magic_num = ru32(buf, head_off); head_off += 4;
+    assert(magic_num == 0x5F0F3CF5);
+    u16 header_flags = ru16(buf, head_off); head_off += 2;
+    u16 units_per_em = ru16(buf, head_off); head_off += 2;
+    u64 created = ru64(buf, head_off); head_off += 8;
+    u64 modified = ru64(buf, head_off); head_off += 8;
+    s16 header_x_min = ru16(buf, head_off); head_off += 2;
+    s16 header_y_min = ru16(buf, head_off); head_off += 2;
+    s16 header_x_max = ru16(buf, head_off); head_off += 2;
+    s16 header_y_max = ru16(buf, head_off); head_off += 2;
+    u16 mac_style = ru16(buf, head_off); head_off += 2;
+    u16 lowest_rec_ppem = ru16(buf, head_off); head_off += 2;
+    s16 font_direction_hint = ru16(buf, head_off); head_off += 2;
+    s16 index_to_loc_format = ru16(buf, head_off); head_off += 2;
+    s16 glyph_data_format = ru16(buf, head_off); head_off += 2;
 
-    u16 loca_format = ru16(buf, head_off + 2 * 2 + 4 * 3 + 2 * 2 + 2 * 8 + 8 * 2);
-    u16 loca_offset_size = 2 + 2 * loca_format;
+    printf("HEADER \n");
+    printf("VERSION: %hu.%hu\n", maj_version, min_version);
+    printf("ignored: %u\n", font_revision & check_sum & header_flags & units_per_em
+            & mac_style & lowest_rec_ppem & font_direction_hint & glyph_data_format);
+    printf("created: %lu - modified %lu\n", created, modified);
+    printf("index to loc format: %hd\n", index_to_loc_format);
+    printf("coords min: x - %hd | y - %hd\n", header_x_min, header_y_min);
+    printf("coords max: x - %hd | y - %hd\n", header_x_max, header_y_max);
+
+    assert(index_to_loc_format == 1 && "TODO: change read 32 and 16 byte function for loca lookup");
+    u16 loca_offset_size = 4;
 
     // cmap - table 
 
@@ -105,7 +140,6 @@ void lu_parse_ttf(const char *font) {
         printf("ERROR: font has no format4 encoding\n");
         return;
     }
-
 
     u16 format = ru16(buf, format4_off); format4_off += 2;
     assert(format == 4);
@@ -144,7 +178,7 @@ void lu_parse_ttf(const char *font) {
         id_range_offsets[i] = ru16(buf, format4_off); format4_off += 2;
     }
 
-    u16 code_point = 'Q';
+    u16 code_point = 'A';
     u16 glyph_id   = 0;
 
     for (u16 i = 0; i < seg_count; i++) {
@@ -175,23 +209,27 @@ void lu_parse_ttf(const char *font) {
 
     // loca - table
     // used to identify offset into the glyf table
-    u16 glyph_id_offset = ru16(buf, loca_off + glyph_id * loca_offset_size);
+    printf("%u - %hu - %hu\n", loca_off, glyph_id, loca_offset_size);
+
+    u32 glyph_id_offset = ru32(buf, loca_off + glyph_id * loca_offset_size);
     printf("glyph_id: %hu - offset: %hu\n", glyph_id, glyph_id_offset);
 
     // glyf - table
     glyf_off += (u32)glyph_id_offset;
 
-    s16 num_of_contours = (s16)ru16(buf, glyf_off); glyf_off += 2;
-    s16 x_min           = (s16)ru16(buf, glyf_off); glyf_off += 2;
-    s16 y_min           = (s16)ru16(buf, glyf_off); glyf_off += 2;
-    s16 x_max           = (s16)ru16(buf, glyf_off); glyf_off += 2;
-    s16 y_max           = (s16)ru16(buf, glyf_off); glyf_off += 2;
+    s16 num_of_contours = ru16(buf, glyf_off); glyf_off += 2;
+    s16 x_min           = ru16(buf, glyf_off); glyf_off += 2;
+    s16 y_min           = ru16(buf, glyf_off); glyf_off += 2;
+    s16 x_max           = ru16(buf, glyf_off); glyf_off += 2;
+    s16 y_max           = ru16(buf, glyf_off); glyf_off += 2;
 
     printf("contours: %hd\n", num_of_contours);
     printf("y: %hd - %hd | x: %hd - %hd\n", y_min, y_max, x_min, x_max);
 
     if (num_of_contours < 0) {
         printf("TODO: compound glyhs are not yet supported!");
+        free(buf);
+        free(codes);
         return;
     }
 
@@ -213,19 +251,15 @@ void lu_parse_ttf(const char *font) {
     s16 x_cords[variable] = {};
     s16 y_cords[variable] = {};
 
-    const u8 REPEAT_BIT     = 0b00001000;
-    const u8 X_SHORT_VECTOR = 0b00000010;
-    const u8 Y_SHORT_VECTOR = 0b00000100;
-
+    // TODO: more size checks
     for (u16 i = 0; i < variable; i++) {
-        u8 flag = buf[glyf_off++];
-        flags[i] = flag;
+        flags[i] = buf[glyf_off++];
 
-        if ((flag & REPEAT_BIT) == REPEAT_BIT) {
+        if ((flags[i] & REPEAT_FLAG) == REPEAT_FLAG) {
             u8 times = buf[glyf_off++];
 
             for (u16 j = 1; j <= times; j++) {
-                flags[i + j] = flag;
+                flags[i + j] = flags[i];
             }
 
             i += times;
@@ -233,22 +267,48 @@ void lu_parse_ttf(const char *font) {
     }
 
     for (u16 i = 0; i < variable; i++) {
-        if ((flags[i] & X_SHORT_VECTOR) == X_SHORT_VECTOR) {
-            x_cords[i] = (s16)buf[glyf_off++];
-        } else {
-            x_cords[i] = (s16)ru16(buf, glyf_off); glyf_off += 2;
-        }
-    }
-    for (u16 i = 0; i < variable; i++) {
-        if ((flags[i] & Y_SHORT_VECTOR) == Y_SHORT_VECTOR) {
-            y_cords[i] = (s16)buf[glyf_off++];
-        } else {
-            y_cords[i] = (s16)ru16(buf, glyf_off); glyf_off += 2;
+        switch (flags[i] & (X_SHORT_VECTOR | X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR)) {
+            case X_SHORT_VECTOR:
+                x_cords[i] = (s16)buf[glyf_off++] * (-1);
+                break;
+            case X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR:
+                if (i == 0) x_cords[i] = 0;
+                else x_cords[i] = x_cords[i - 1];
+                break;
+            case X_SHORT_VECTOR | X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR:
+                x_cords[i] = buf[glyf_off++];
+                break;
+            default:
+                x_cords[i] = ru16(buf, glyf_off); glyf_off += 2;
+                break;
         }
     }
 
     for (u16 i = 0; i < variable; i++) {
-        printf("x: %hu - y: %hu\n", x_cords[i], y_cords[i]);
+        switch (flags[i] & (Y_SHORT_VECTOR | Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR)) {
+            case Y_SHORT_VECTOR:
+                y_cords[i] = -(s16)buf[glyf_off++];
+                break;
+            case Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR:
+                if (i == 0) y_cords[i] = 0;
+                else y_cords[i] = y_cords[i - 1];
+                break;
+            case Y_SHORT_VECTOR | Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR:
+                y_cords[i] = buf[glyf_off++];
+                break;
+            default:
+                y_cords[i] = ru16(buf, glyf_off); glyf_off += 2;
+                break;
+        }
+    }
+
+    s16 x = 0;
+    s16 y = 0;
+
+    for (u16 i = 0; i < variable; i++) {
+        printf("x: %hd - y: %hd\n", x, y);
+        x += x_cords[i];
+        y += y_cords[i];
     }
     
     printf("%hu\n", end_pts_of_contours[num_of_contours - 1]);
@@ -258,6 +318,7 @@ void lu_parse_ttf(const char *font) {
 }
 
 /* 
+ * Q
  * table directory
  * ===============
  * Type 	Name 	    Description
