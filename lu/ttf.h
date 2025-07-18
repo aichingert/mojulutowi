@@ -7,7 +7,8 @@
 #include <stdio.h>
 
 #include "lu.h"
+#include "window.h"
 
-void lu_parse_ttf(const char *font);
+Vertex *lu_extract_glyph_from_font(const char *font, u16 code_point, size_t *size);
 
 #endif /* LU_TTF_H */

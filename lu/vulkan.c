@@ -23,6 +23,7 @@ PFN_vkDestroyInstance vkDestroyInstance;
 PFN_vkCmdBeginRenderingKHR vkCmdBeginRenderingKHR;
 PFN_vkCmdEndRenderingKHR vkCmdEndRenderingKHR;
 PFN_vkEnumerateDeviceExtensionProperties vkEnumerateDeviceExtensionProperties;
+PFN_vkGetPhysicalDeviceMemoryProperties vkGetPhysicalDeviceMemoryProperties;
 
 static PFN_vkGetDeviceProcAddr device_loader = NULL;
 
@@ -60,7 +61,15 @@ PFN_vkResetFences vkResetFences;
 PFN_vkQueuePresentKHR vkQueuePresentKHR;
 PFN_vkCmdPipelineBarrier vkCmdPipelineBarrier;
 PFN_vkDeviceWaitIdle vkDeviceWaitIdle;
-
+PFN_vkCreateBuffer vkCreateBuffer;
+PFN_vkDestroyBuffer vkDestroyBuffer;
+PFN_vkGetBufferMemoryRequirements vkGetBufferMemoryRequirements;
+PFN_vkAllocateMemory vkAllocateMemory;
+PFN_vkBindBufferMemory vkBindBufferMemory;
+PFN_vkMapMemory vkMapMemory;
+PFN_vkUnmapMemory vkUnmapMemory;
+PFN_vkFreeMemory vkFreeMemory;
+PFN_vkCmdBindVertexBuffers vkCmdBindVertexBuffers;
 
 void load_instance_proc_addr() {
     // TODO: look for other names as well
@@ -104,6 +113,7 @@ void instance_load_vulkan(VkInstance instance) {
     vkDestroySurfaceKHR = (PFN_vkDestroySurfaceKHR)loader(instance, "vkDestroySurfaceKHR");
     vkDestroyInstance = (PFN_vkDestroyInstance)loader(instance, "vkDestroyInstance");
     vkEnumerateDeviceExtensionProperties = (PFN_vkEnumerateDeviceExtensionProperties)loader(instance, "vkEnumerateDeviceExtensionProperties");
+    vkGetPhysicalDeviceMemoryProperties = (PFN_vkGetPhysicalDeviceMemoryProperties)loader(instance, "vkGetPhysicalDeviceMemoryProperties");
 
     vkCmdBeginRenderingKHR = (PFN_vkCmdBeginRenderingKHR)
         loader(instance, "vkCmdBeginRenderingKHR");
@@ -150,6 +160,15 @@ void device_load_vulkan(VkDevice device) {
     vkQueuePresentKHR = (PFN_vkQueuePresentKHR)device_loader(device, "vkQueuePresentKHR");
     vkCmdPipelineBarrier = (PFN_vkCmdPipelineBarrier)device_loader(device, "vkCmdPipelineBarrier");
     vkDeviceWaitIdle = (PFN_vkDeviceWaitIdle)device_loader(device, "vkDeviceWaitIdle");
+    vkCreateBuffer = (PFN_vkCreateBuffer)device_loader(device, "vkCreateBuffer");
+    vkDestroyBuffer = (PFN_vkDestroyBuffer)device_loader(device, "vkDestroyBuffer");
+    vkGetBufferMemoryRequirements = (PFN_vkGetBufferMemoryRequirements)device_loader(device, "vkGetBufferMemoryRequirements");
+    vkAllocateMemory = (PFN_vkAllocateMemory)device_loader(device, "vkAllocateMemory");
+    vkBindBufferMemory = (PFN_vkBindBufferMemory)device_loader(device, "vkBindBufferMemory");
+    vkMapMemory = (PFN_vkMapMemory)device_loader(device, "vkMapMemory");
+    vkUnmapMemory = (PFN_vkUnmapMemory)device_loader(device, "vkUnmapMemory");
+    vkFreeMemory = (PFN_vkFreeMemory)device_loader(device, "vkFreeMemory");
+    vkCmdBindVertexBuffers = (PFN_vkCmdBindVertexBuffers)device_loader(device, "vkCmdBindVertexBuffers");
 }
 
 bool validation_layers_are_available() {
@@ -515,11 +534,32 @@ VkShaderModule lu_create_shader_module(VkDevice device, const char *shader) {
     return shader_module;
 }
 
+VkVertexInputBindingDescription vertex_binding_description() {
+    VkVertexInputBindingDescription description = {
+        .binding = 0,
+        .stride = sizeof(Vertex),
+        .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+    };
+
+    return description;
+}
+
+VkVertexInputAttributeDescription vertex_attribute_description() {
+    VkVertexInputAttributeDescription description = {
+        .binding = 0,
+        .location = 0,
+        .format = VK_FORMAT_R32G32_SFLOAT,
+        .offset = offsetof(Vertex, y),
+    };
+
+    return description;
+}
+
 void lu_create_graphics_pipeline(Window *win) {
     VkRenderer vk = win->renderer;
 
-    VkShaderModule vert = lu_create_shader_module(vk.device, "lu/spirv/mesh.vert.spv");
-    VkShaderModule frag = lu_create_shader_module(vk.device, "lu/spirv/mesh.frag.spv");
+    VkShaderModule vert = lu_create_shader_module(vk.device, "lu/spirv/text.vert.spv");
+    VkShaderModule frag = lu_create_shader_module(vk.device, "lu/spirv/text.frag.spv");
 
     VkPipelineShaderStageCreateInfo shader_stages[] = {
         {
@@ -547,15 +587,20 @@ void lu_create_graphics_pipeline(Window *win) {
         .pDynamicStates = dynamic,
     };
 
+    VkVertexInputBindingDescription v_b_desc = vertex_binding_description();
+    VkVertexInputAttributeDescription v_a_desc = vertex_attribute_description();
+
     VkPipelineVertexInputStateCreateInfo vertex_input_info = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-        .vertexBindingDescriptionCount = 0,
-        .vertexAttributeDescriptionCount = 0,
+        .vertexBindingDescriptionCount = 1,
+        .vertexAttributeDescriptionCount = 1,
+        .pVertexBindingDescriptions = &v_b_desc,
+        .pVertexAttributeDescriptions = &v_a_desc,
     };
 
     VkPipelineInputAssemblyStateCreateInfo input_assembly = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-        .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        .topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST,
         .primitiveRestartEnable = VK_FALSE,
     };
 
@@ -698,6 +743,68 @@ void lu_create_sync_objs(Window *win) {
     }
 }
 
+u32 find_memory_type(
+        VkPhysicalDevice physical_device, 
+        u32 type_filter, 
+        VkMemoryPropertyFlags props) 
+{
+    VkPhysicalDeviceMemoryProperties mem_props = {0};
+    vkGetPhysicalDeviceMemoryProperties(physical_device, &mem_props);
+
+    for (u32 i = 0; i < mem_props.memoryTypeCount; i++) {
+        bool has_properties = (mem_props.memoryTypes[i].propertyFlags & props) == props;
+
+        if (type_filter & (1 << i) && has_properties) {
+            return i;
+        }
+    }
+
+    assert(false && "Failed to find suitable memory type");
+    return 0;
+}
+
+void lu_create_vertex_buffer(Window *win, Vertex *vertices, size_t size) {
+    VkRenderer *vk = &win->renderer;
+
+    VkBufferCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = sizeof(Vertex) * size,
+        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+    };
+
+    VkBuffer vertex_buffer = {0};
+    VK_CHECK(vkCreateBuffer(vk->device, &create_info, NULL, &vertex_buffer));
+
+    VkMemoryRequirements mem_requires = {0};
+    vkGetBufferMemoryRequirements(vk->device, vertex_buffer, &mem_requires);
+
+    VkMemoryPropertyFlags props = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    VkMemoryAllocateInfo alloc_info = {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .allocationSize = mem_requires.size,
+        .memoryTypeIndex = find_memory_type(vk->physical_device, mem_requires.memoryTypeBits, props),
+    };
+
+    VkDeviceMemory vertex_buffer_memory = {0};
+    VK_CHECK(vkAllocateMemory(vk->device, &alloc_info, NULL, &vertex_buffer_memory));
+
+    vkBindBufferMemory(vk->device, vertex_buffer, vertex_buffer_memory, 0);
+
+    void *data = NULL;
+    vkMapMemory(vk->device, vertex_buffer_memory, 0, create_info.size, 0, &data);
+    memcpy(data, vertices, create_info.size);
+    vkUnmapMemory(vk->device, vertex_buffer_memory);
+
+    vk->vertex_buffer = vertex_buffer;
+    vk->vertex_buffer_memory = vertex_buffer_memory;
+}
+
+void lu_destroy_vertex_buffer(Window *win) {
+    vkDestroyBuffer(win->renderer.device, win->renderer.vertex_buffer, NULL);
+    vkFreeMemory(win->renderer.device, win->renderer.vertex_buffer_memory, NULL);
+}
+
 void lu_setup_renderer(Window *win, const char *name) {
     load_instance_proc_addr();
     VkInstance instance = lu_create_instance(name);
@@ -726,8 +833,11 @@ void lu_setup_renderer(Window *win, const char *name) {
 void lu_record_command_buffer(
         Window *win, 
         VkCommandBuffer command_buffer, 
-        u32 image_index) 
+        u32 image_index,
+        size_t vertices) 
 {
+    VkRenderer *vk = &win->renderer;
+
     VkCommandBufferBeginInfo begin_info = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         .flags = 0,
@@ -742,7 +852,7 @@ void lu_record_command_buffer(
         .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
         .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
         .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .image = win->renderer.images[image_index],
+        .image = vk->images[image_index],
         .subresourceRange = {
           .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
           .baseMipLevel = 0,
@@ -763,7 +873,7 @@ void lu_record_command_buffer(
 
     VkRenderingAttachmentInfoKHR color_attachment_info = {
         .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR,
-        .imageView = win->renderer.image_views[image_index],
+        .imageView = vk->image_views[image_index],
         .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -784,7 +894,11 @@ void lu_record_command_buffer(
 
     vkCmdBeginRenderingKHR(command_buffer, &rendering_info);
 
-    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, win->renderer.graphics_pipeline);
+    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk->graphics_pipeline);
+
+    VkBuffer vertex_buffers[] = {vk->vertex_buffer};
+    VkDeviceSize offsets[]    = {0};
+    vkCmdBindVertexBuffers(command_buffer, 0, 1, vertex_buffers, offsets);
 
     VkViewport viewport = {
         .x = 0.0f,
@@ -803,7 +917,7 @@ void lu_record_command_buffer(
     };
     vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
-    vkCmdDraw(command_buffer, 3, 1, 0, 0);
+    vkCmdDraw(command_buffer, 18, 1, 0, 0);
 
     vkCmdEndRenderingKHR(command_buffer);
 
@@ -832,7 +946,7 @@ void lu_record_command_buffer(
     VK_CHECK(vkEndCommandBuffer(command_buffer));
 }
 
-void lu_draw_frame(Window *win) {
+void lu_draw_frame(Window *win, size_t vertices) {
     VkRenderer *vk = &win->renderer;
     u32 frame = vk->current_frame;
 
@@ -843,7 +957,7 @@ void lu_draw_frame(Window *win) {
     vkAcquireNextImageKHR(vk->device, vk->swapchain, UINT64_MAX, vk->acq_semas[frame], VK_NULL_HANDLE, &image_index);
 
     vkResetCommandBuffer(vk->command_buffers[frame], 0);
-    lu_record_command_buffer(win, vk->command_buffers[frame], image_index);
+    lu_record_command_buffer(win, vk->command_buffers[frame], image_index, vertices);
 
     VkSemaphore wait_semas[] = {vk->acq_semas[frame]};
     VkSemaphore signal_semas[] = { vk->rel_semas[frame] };
@@ -880,6 +994,7 @@ void lu_free_renderer(Window *win) {
     VkRenderer *vk = &win->renderer;
 
     lu_destroy_swapchain(win);
+    lu_destroy_vertex_buffer(win);
 
     for (u32 i = 0; i < MAX_FRAMES_BETWEEN; i++) {
         vkDestroySemaphore(vk->device, vk->acq_semas[i], NULL);

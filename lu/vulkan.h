@@ -11,7 +11,6 @@
 #define VK_USE_PLATFORM_WAYLAND_KHR
 #include <vulkan/vulkan.h>
 
-
 #define VK_CHECK(call) \
     do \
     { \
@@ -22,10 +21,10 @@
         assert(result_ == VK_SUCCESS); \
     } while(0)
 
-
 void        lu_setup_renderer(Window *, const char *);
+void        lu_create_vertex_buffer(Window *, Vertex *, size_t);
 void        lu_recreate_swapchain(Window *);
-void        lu_draw_frame(Window *);
+void        lu_draw_frame(Window *, size_t);
 void        lu_free_renderer(Window *);
 
 #endif /* LU_VULKAN_H */

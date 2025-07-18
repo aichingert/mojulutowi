@@ -23,21 +23,20 @@
 #define X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR    0b00010000
 #define Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR    0b00100000
 
-void lu_parse_ttf(const char *font) {
+Vertex *lu_extract_glyph_from_font(const char *font, u16 code_point, size_t *size) {
     // TODO: should make custom file functions
     FILE *file = fopen(font, "r");
     if (!file) {
-        printf("ERROR: file is null!\n");
-        return;
+        assert(false && "ERROR: file is null!");
     }
 
     fseek(file, 0, SEEK_END);
     long long file_size = ftell(file);
     fseek(file, 0, SEEK_SET);
 
-    size_t size = file_size / sizeof(u8);
+    size_t b_size = file_size / sizeof(u8);
     u8 *buf = (u8*)malloc(file_size);
-    fread(buf, sizeof(u32), size, file);
+    fread(buf, sizeof(u32), b_size, file);
     fclose(file);
 
     // offset table - table
@@ -104,8 +103,8 @@ void lu_parse_ttf(const char *font) {
             & mac_style & lowest_rec_ppem & font_direction_hint & glyph_data_format);
     printf("created: %lu - modified %lu\n", created, modified);
     printf("index to loc format: %hd\n", index_to_loc_format);
-    printf("coords min: x - %hd | y - %hd\n", header_x_min, header_y_min);
-    printf("coords max: x - %hd | y - %hd\n", header_x_max, header_y_max);
+    printf("coords min: x [\t%hd ] | y [\t%hd ]\n", header_x_min, header_y_min);
+    printf("coords max: x [\t%hd ] | y [\t%hd ]\n", header_x_max, header_y_max);
 
     assert(index_to_loc_format == 1 && "TODO: change read 32 and 16 byte function for loca lookup");
     u16 loca_offset_size = 4;
@@ -137,8 +136,7 @@ void lu_parse_ttf(const char *font) {
     }
 
     if (format4_off == 0) {
-        printf("ERROR: font has no format4 encoding\n");
-        return;
+        assert(false && "ERROR: font has no format4 encoding");
     }
 
     u16 format = ru16(buf, format4_off); format4_off += 2;
@@ -154,11 +152,10 @@ void lu_parse_ttf(const char *font) {
     ru16(buf, format4_off); format4_off += 2;
     ru16(buf, format4_off); format4_off += 2;
 
-    u16 *codes = (u16*)malloc(sizeof(u16) * seg_count * 4);
-    u16 *end_codes          = codes + seg_count * 0;
-    u16 *start_codes        = codes + seg_count * 1;
-    s16 *id_deltas          = (s16*)codes + seg_count * 2;
-    u16 *id_range_offsets   = codes + seg_count * 3;
+    u16 end_codes[seg_count] = {};
+    u16 start_codes[seg_count] = {};
+    u16 id_deltas[seg_count] = {};
+    u16 id_range_offsets[seg_count] = {};
 
     for (u16 i = 0; i < seg_count; i++) {
         end_codes[i] = ru16(buf, format4_off); format4_off += 2;
@@ -178,7 +175,6 @@ void lu_parse_ttf(const char *font) {
         id_range_offsets[i] = ru16(buf, format4_off); format4_off += 2;
     }
 
-    u16 code_point = 'Z';
     u16 glyph_id   = 0;
 
     for (u16 i = 0; i < seg_count; i++) {
@@ -190,8 +186,8 @@ void lu_parse_ttf(const char *font) {
                 glyph_id = code_point + id_delta;
                 break;
             } else if (id_range_off == 0xFFFF) {
-                printf("ERROR: malformed font");
-                break;
+                free(buf);
+                assert(false && "ERROR: malformed font");
             }
 
             u16 delta = (code_point - start_codes[i]) * 2;
@@ -202,8 +198,8 @@ void lu_parse_ttf(const char *font) {
             printf("%hu\n", pos);
 
             // TODO: glyph_id = buf[pos] + id_delta
-            printf("TODO\n");
-            break;
+            free(buf);
+            assert(false && "TODO");
         }
     }
 
@@ -222,15 +218,30 @@ void lu_parse_ttf(const char *font) {
     s16 y_min           = ru16(buf, glyf_off); glyf_off += 2;
     s16 x_max           = ru16(buf, glyf_off); glyf_off += 2;
     s16 y_max           = ru16(buf, glyf_off); glyf_off += 2;
+    s16 x_err = 0;
+    s16 y_err = 0;
+
+    if (x_min < 0) {
+        x_err = -x_min;
+        x_max += x_err;
+        x_min = 0;
+    } else if (x_min > 0) {
+        x_min = 0;
+    }
+    if (y_min < 0) {
+        y_err = -y_min;
+        y_max += y_err;
+        y_min = 0;
+    } else if (y_min > 0) {
+        y_min = 0;
+    }
 
     printf("contours: %hd\n", num_of_contours);
     printf("y: %hd - %hd | x: %hd - %hd\n", y_min, y_max, x_min, x_max);
 
     if (num_of_contours < 0) {
-        printf("TODO: compound glyhs are not yet supported!");
         free(buf);
-        free(codes);
-        return;
+        assert(false && "TODO: compound glyhs are not yet supported!");
     }
 
     u16 end_pts_of_contours[num_of_contours] = {};
@@ -245,8 +256,13 @@ void lu_parse_ttf(const char *font) {
     u16 points = end_pts_of_contours[num_of_contours - 1] + 1;
     printf("LEN: %hu\n", points);
     u8 flags[points] = {};
-    s16 x_cords[points] = {};
-    s16 y_cords[points] = {};
+
+    *size = points + 1;
+    Vertex *vertices = (Vertex*)malloc(sizeof(Vertex) * (points + 1));
+    vertices[0] = (Vertex){
+        .x = 0.0,
+        .y = 0.0,
+    };
 
     // TODO: more size checks
     u16 i = 0;
@@ -268,59 +284,62 @@ void lu_parse_ttf(const char *font) {
         i += 1;
     }
     printf("flags done \n");
+    s16 value = 0;
 
     for (u16 i = 0; i < points; i++) {
         switch (flags[i] & (X_SHORT_VECTOR | X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR)) {
             case X_SHORT_VECTOR:
-                x_cords[i] = (s16)buf[glyf_off++] * (-1);
+                value = -((s16)buf[glyf_off++]) + x_err;
+                vertices[i + 1].x = ((f32)value) + vertices[i].x;
                 break;
             case X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR:
-                x_cords[i] = 0;
+                vertices[i + 1].x = vertices[i].x;
                 break;
             case X_SHORT_VECTOR | X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR:
-                x_cords[i] = buf[glyf_off++];
+                value = ((s16)buf[glyf_off++]) + x_err;
+                vertices[i + 1].x = ((f32)value) + vertices[i].x;
                 break;
             default:
-                x_cords[i] = ru16(buf, glyf_off); glyf_off += 2;
+                value = ((s16)ru16(buf, glyf_off)) + x_err; glyf_off += 2;
+                vertices[i + 1].x = ((f32)value) + vertices[i].x;
                 break;
         }
     }
 
     for (u16 i = 0; i < points; i++) {
-        if (i == 2) {
-            printf("%08b\n", flags[i]);
-        }
         switch (flags[i] & (Y_SHORT_VECTOR | Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR)) {
             case Y_SHORT_VECTOR:
-                if (i == 2) printf("y - short\n");
-                y_cords[i] = -(s16)buf[glyf_off++];
+                value = -((s16)buf[glyf_off++]) + x_err;
+                vertices[i + 1].y = ((f32)value) + vertices[i].y;
                 break;
             case Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR:
-                y_cords[i] = 0;
+                vertices[i + 1].y = vertices[i].y;
                 break;
             case Y_SHORT_VECTOR | Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR:
-                if (i == 2) printf("both\n");
-                y_cords[i] = buf[glyf_off++];
+                value = ((s16)buf[glyf_off++]) + x_err;
+                vertices[i + 1].y = ((f32)value) + vertices[i].y;
                 break;
             default:
-                y_cords[i] = ru16(buf, glyf_off); glyf_off += 2;
+                value = ((s16)ru16(buf, glyf_off)) + x_err; glyf_off += 2;
+                vertices[i + 1].y = ((f32)value) + vertices[i].y;
                 break;
         }
     }
 
-    s16 x = 0;
-    s16 y = 0;
+    f32 x_denom = (x_max - x_min);
+    f32 y_denom = (y_max - y_min);
+    printf("%f - %f\n", x_denom, y_denom);
 
-    for (u16 i = 0; i < points; i++) {
-        x += x_cords[i];
-        y += y_cords[i];
-        printf("x: %hd - y: %hd\n", x, y);
+    for (u16 i = 0; i < points + 1; i++) {
+        vertices[i].x = (vertices[i].x - x_min) / x_denom;
+        vertices[i].y = (vertices[i].y - y_min) / y_denom;
+        printf("x: %f - y: %f\n", vertices[i].x, vertices[i].y);
     }
     
     printf("%hu\n", end_pts_of_contours[num_of_contours - 1]);
 
-    free(codes);
     free(buf);
+    return vertices;
 }
 
 /* 
@@ -332,7 +351,7 @@ void lu_parse_ttf(const char *font) {
  * uint32 	checkSum 	checksum for this table
  * uint32 	offset 	    offset from beginning of sfnt
  * uint32 	length 	    length of this table in byte (actual length not padded length)
-*/ 
 void lu_parse_table_directory() {
-
 }
+*/ 
+

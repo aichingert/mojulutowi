@@ -15,6 +15,11 @@
 
 #define MAX_FRAMES_BETWEEN 2
 
+typedef struct Vertex {
+    f32 x;
+    f32 y;
+} Vertex;
+
 typedef struct VkRenderer {
     VkInstance instance;
     VkSurfaceKHR surface;
@@ -37,6 +42,9 @@ typedef struct VkRenderer {
     VkSemaphore acq_semas[MAX_FRAMES_BETWEEN];
     VkSemaphore rel_semas[MAX_FRAMES_BETWEEN];
     VkFence between_fences[MAX_FRAMES_BETWEEN];
+
+    VkBuffer        vertex_buffer;
+    VkDeviceMemory  vertex_buffer_memory;
 
     u32 current_frame;
 
