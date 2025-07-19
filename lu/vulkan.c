@@ -600,7 +600,7 @@ void lu_create_graphics_pipeline(Window *win) {
 
     VkPipelineInputAssemblyStateCreateInfo input_assembly = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-        .topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST,
+        .topology = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP,
         .primitiveRestartEnable = VK_FALSE,
     };
 

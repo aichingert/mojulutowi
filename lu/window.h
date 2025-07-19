@@ -16,8 +16,8 @@
 #define MAX_FRAMES_BETWEEN 2
 
 typedef struct Vertex {
-    f32 x;
     f32 y;
+    f32 x;
 } Vertex;
 
 typedef struct VkRenderer {

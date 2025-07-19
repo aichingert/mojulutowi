@@ -9,7 +9,7 @@ int main(void) {
     // ("/home/booz/ext/nerd-fonts/src/unpatched-fonts/Arimo/Regular/Arimo-Regular.ttf")
     const char *font = "/home/booz/ext/nerd-fonts/src/unpatched-fonts/Iosevka/Iosevka-Medium.ttf";
 
-    Vertex *vertices = lu_extract_glyph_from_font(font, 'G', &len);
+    Vertex *vertices = lu_extract_glyph_from_font(font, 'A', &len);
     lu_create_vertex_buffer(win, vertices, len);
     printf("%lu\n", len);
 
