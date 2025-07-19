@@ -330,7 +330,10 @@ Vertex *lu_extract_glyph_from_font(const char *font, u16 code_point, size_t *siz
     f32 y_denom = (y_max - y_min);
     printf("%f - %f\n", x_denom, y_denom);
 
-    for (u16 i = 0; i < points + 1; i++) {
+    *size -= 1;
+    vertices = &vertices[1];
+
+    for (u16 i = 0; i < *size; i++) {
         vertices[i].x = (vertices[i].x - x_min) / x_denom;
         vertices[i].y = (vertices[i].y - y_min) / y_denom;
         printf("x: %f - y: %f\n", vertices[i].x, vertices[i].y);
@@ -338,7 +341,7 @@ Vertex *lu_extract_glyph_from_font(const char *font, u16 code_point, size_t *siz
     
     printf("%hu\n", end_pts_of_contours[num_of_contours - 1]);
 
-    free(buf);
+    free(buf); 
     return vertices;
 }
 

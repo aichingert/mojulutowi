@@ -23,6 +23,7 @@
 
 void        lu_setup_renderer(Window *, const char *);
 void        lu_create_vertex_buffer(Window *, Vertex *, size_t);
+void        lu_destroy_vertex_buffer(Window *);
 void        lu_recreate_swapchain(Window *);
 void        lu_draw_frame(Window *, size_t);
 void        lu_free_renderer(Window *);

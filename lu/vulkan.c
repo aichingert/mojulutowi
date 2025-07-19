@@ -801,6 +801,7 @@ void lu_create_vertex_buffer(Window *win, Vertex *vertices, size_t size) {
 }
 
 void lu_destroy_vertex_buffer(Window *win) {
+    VK_CHECK(vkDeviceWaitIdle(win->renderer.device));
     vkDestroyBuffer(win->renderer.device, win->renderer.vertex_buffer, NULL);
     vkFreeMemory(win->renderer.device, win->renderer.vertex_buffer_memory, NULL);
 }
