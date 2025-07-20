@@ -6,8 +6,12 @@ int main(void) {
     Window *win = lu_create_window("hello", 640, 480);
 
     size_t len = 0;
-    // ("/home/booz/ext/nerd-fonts/src/unpatched-fonts/Arimo/Regular/Arimo-Regular.ttf")
-    const char *font = "/home/pha/ext/nerd-fonts/src/unpatched-fonts/Iosevka/Iosevka-Medium.ttf";
+    const char *font = "/home/booz/ext/nerd-fonts/src/unpatched-fonts/Iosevka/Iosevka-Medium.ttf";
+    // /home/booz/ext/nerd-fonts/src/unpatched-fonts/Arimo/Regular/Arimo-Regular.ttf
+    //const char *font = "/home/booz/ext/nerd-fonts/src/unpatched-fonts/Arimo/Regular/Arimo-Regular.ttf";
+    // TODO: jetbrains mono
+    //const char *font = "/home/booz/ext/nerd-fonts/src/unpatched-fonts/JetBrainsMono/Ligatures/Regular/JetBrainsMono-Regular.ttf";
+    //const char *font = "/home/booz/ext/nerd-fonts/src/unpatched-fonts/UbuntuMono/Regular/UbuntuMono-R.ttf";
 
     
     printf("%lu\n", len);
@@ -15,7 +19,7 @@ int main(void) {
     u16 t = 0;
 
     while (!lu_window_should_close(win)) {
-        if (t > 100) {
+        if (t > 1000) {
             t = 0;
             c = (c + 1) % 26;
         }

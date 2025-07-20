@@ -23,7 +23,7 @@
 #define X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR    0b00010000
 #define Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR    0b00100000
 
-Vertex *lu_extract_glyph_from_font(const char *font, u16 code_point, size_t *size) {
+Vertex* lu_extract_glyph_from_font(const char *font, u16 code_point, size_t *size) {
     // TODO: should make custom file functions
     FILE *file = fopen(font, "r");
     if (!file) {
@@ -171,6 +171,9 @@ Vertex *lu_extract_glyph_from_font(const char *font, u16 code_point, size_t *siz
     for (u16 i = 0; i < seg_count; i++) {
         id_deltas[i] = ru16(buf, format4_off); format4_off += 2;
     }
+
+    u16 id_range_offset_pos = format4_off;
+
     for (u16 i = 0; i < seg_count; i++) {
         id_range_offsets[i] = ru16(buf, format4_off); format4_off += 2;
     }
@@ -179,27 +182,28 @@ Vertex *lu_extract_glyph_from_font(const char *font, u16 code_point, size_t *siz
 
     for (u16 i = 0; i < seg_count; i++) {
         if (end_codes[i] >= code_point && start_codes[i] < code_point) {
-            u16 id_range_off = id_range_offsets[i];
-            u16 id_delta     = id_deltas[i];
-
-            if (id_range_off == 0) {
-                glyph_id = code_point + id_delta;
+            if (id_range_offsets[i] == 0) {
+                glyph_id = code_point + id_deltas[i];
                 break;
-            } else if (id_range_off == 0xFFFF) {
+            } else if (id_range_offsets[i] == 0xFFFF) {
                 free(buf);
                 assert(false && "ERROR: malformed font");
             }
 
             u16 delta = (code_point - start_codes[i]) * 2;
-            u16 id_range_offset_pos = format4_off - 2 * seg_count + i;
-            u16 pos = id_range_offset_pos + delta + id_range_off;
 
-            // TODO: 0 in buf is a missing glyph
-            printf("%hu\n", pos);
+            id_range_offset_pos += i * 2;
+            u16 pos = id_range_offset_pos + delta + id_range_offsets[i];
 
-            // TODO: glyph_id = buf[pos] + id_delta
-            free(buf);
-            assert(false && "TODO");
+            if (buf[pos] == 0) {
+                for (u8 j = 0; j < 200; j++) {
+                    printf("MISSING GLYPH\n");
+                }
+                break;
+            }
+
+            glyph_id = buf[pos] + id_deltas[i];
+            break;
         }
     }
 
@@ -334,8 +338,12 @@ Vertex *lu_extract_glyph_from_font(const char *font, u16 code_point, size_t *siz
     vertices = &vertices[1];
 
     for (u16 i = 0; i < *size; i++) {
+        /*
         vertices[i].x = (vertices[i].x - x_min) / x_denom;
         vertices[i].y = (vertices[i].y - y_min) / y_denom;
+        */
+        vertices[i].x = vertices[i].x / 1000.f;
+        vertices[i].y = vertices[i].y / 1000.f;
         printf("x: %f - y: %f\n", vertices[i].x, vertices[i].y);
     }
     

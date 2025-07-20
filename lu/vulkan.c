@@ -549,7 +549,7 @@ VkVertexInputAttributeDescription vertex_attribute_description() {
         .binding = 0,
         .location = 0,
         .format = VK_FORMAT_R32G32_SFLOAT,
-        .offset = offsetof(Vertex, y),
+        .offset = offsetof(Vertex, x),
     };
 
     return description;
