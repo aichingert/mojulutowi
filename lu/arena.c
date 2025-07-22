@@ -1,4 +1,5 @@
 #include "arena.h"
+#include <stdio.h>
 #include <assert.h>
 #include <stddef.h>
 #include <sys/mman.h>
@@ -19,10 +20,11 @@ Arena* lu_arena_init(u64 size) {
 
 void* lu_arena_alloc(Arena *arena, u64 size) {
     if (arena->used + size > arena->size) {
+        printf("%lu + %lu = %lu | %lu\n", arena->used, size, arena->used + size, arena->size);
         assert(false && "TODO: handle reallocation of the arena");
     }
 
-    void *mem = arena->base + arena->used;
+    void *mem = (u8*)arena->base + arena->used;
     arena->used += size;
     return mem;
 }

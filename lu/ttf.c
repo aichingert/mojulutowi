@@ -1,4 +1,8 @@
+#include <string.h>
+
 #include "ttf.h"
+#include "arena.h"
+#include "lu_string.h"
 
 // References: 
 // https://developer.apple.com/fonts/TrueType-Reference-Manual/RM06/Chap6.html
@@ -18,31 +22,48 @@
 #define ru32(buf, off) ((u32)buf[off] << 24) | ((u32)buf[off + 1] << 16) | ((u32)buf[off + 2] << 8) | ((u32)buf[off + 3])
 #define ru64(buf, off) (((u64)ru32(buf, off)) << (u64)32) | ((u64)ru32(buf, off + 4))
 
-#define REPEAT_FLAG                             0b00001000
+#define ON_CURVE                                0b00000001
 #define X_SHORT_VECTOR                          0b00000010
 #define Y_SHORT_VECTOR                          0b00000100
+#define REPEAT_FLAG                             0b00001000
 #define X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR    0b00010000
 #define Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR    0b00100000
 
-Vertex* lu_extract_glyph_from_font(const char *font, u16 code_point, size_t *size) {
-    // TODO: should make custom file functions
-    FILE *file = fopen(font, "r");
-    if (!file) {
-        assert(false && "ERROR: file is null!");
+// TODO: should make custom file functions
+u8* lu_read_font(Arena *arena, String font) {
+    FILE *font_file = fopen(font.value, "r");
+    if (!font_file) {
+        assert(false && "ERROR: unable to open file!");
     }
 
-    fseek(file, 0, SEEK_END);
-    long long file_size = ftell(file);
-    fseek(file, 0, SEEK_SET);
+    fseek(font_file, 0, SEEK_END);
+    long long file_size = ftell(font_file);
+    fseek(font_file, 0, SEEK_SET);
 
     size_t b_size = file_size / sizeof(u8);
-    u8 *buf = (u8*)malloc(file_size);
-    fread(buf, sizeof(u32), b_size, file);
-    fclose(file);
+    u8 *buf = (u8*)lu_arena_alloc(arena, b_size);
+    fread(buf, sizeof(u8), b_size, font_file);
+    fclose(font_file);
 
-    // offset table - table
+    return buf;
+}
+
+typedef struct OffsetSubtable {
+    u32 scaler_type;
+    u16 num_tables;
+    u16 search_range;
+    u16 entry_selector;
+    u16 range_shift;
+} OffsetSubtable;
+
+Vertex* lu_extract_glyph_from_font(Arena *arena, String font, u16 code_point, size_t *size) {
+    u8 *buf = lu_read_font(arena, font);
+
+    printf("OffsetSubtable: %u - %hu/%hu\n", subtable.scaler_type, subtable.num_tables, ptables);
+
+        // offset table - table
     u32 scaler = buf[0] << 24 | buf[1] << 16 | buf[2] << 8 | buf[3];
-    u32 skip = sizeof(u16) * 4 + sizeof(u32);
+    u32 skip = sizeof(OffsetSubtable);
 
     if (scaler == 0x00010000) {
         printf("adobe - microsoft\n");
@@ -59,6 +80,7 @@ Vertex* lu_extract_glyph_from_font(const char *font, u16 code_point, size_t *siz
     u32 glyf_off = 0;
 
     u16 tables = buf[4] << 8 | buf[5];
+    printf("TABLES: %hu\n", tables);
 
     for (u16 i = 0; i < tables; i++) {
         u32 tag = ru32(buf, skip); skip += 4;
@@ -187,7 +209,6 @@ Vertex* lu_extract_glyph_from_font(const char *font, u16 code_point, size_t *siz
                 glyph_id = code_point + id_deltas[i];
                 break;
             } else if (id_range_offsets[i] == 0xFFFF) {
-                free(buf);
                 assert(false && "ERROR: malformed font");
             }
 
@@ -245,10 +266,10 @@ Vertex* lu_extract_glyph_from_font(const char *font, u16 code_point, size_t *siz
     printf("y: %hd - %hd | x: %hd - %hd\n", y_min, y_max, x_min, x_max);
 
     if (num_of_contours < 0) {
-        free(buf);
         assert(false && "TODO: compound glyhs are not yet supported!");
     }
 
+    // TODO: consider contours and not just use everything like a thing with one contour
     u16 end_pts_of_contours[num_of_contours] = {};
     for (s16 i = 0; i < num_of_contours; i++) {
         end_pts_of_contours[i] = ru16(buf, glyf_off); glyf_off += 2;
@@ -264,7 +285,8 @@ Vertex* lu_extract_glyph_from_font(const char *font, u16 code_point, size_t *siz
     u8 flags[points] = {};
 
     *size = points + 1;
-    Vertex *vertices = (Vertex*)malloc(sizeof(Vertex) * (points + 1));
+    // TODO: use dynamic arrays and insert the mid points of the bezier curves
+    Vertex *vertices = (Vertex*)malloc(sizeof(Vertex) * (points + 1) * 2);
     vertices[0] = (Vertex){
         .x = 0.0,
         .y = 0.0,
@@ -356,9 +378,9 @@ Vertex* lu_extract_glyph_from_font(const char *font, u16 code_point, size_t *siz
         vertices[i].y = vertices[i].y / 1000.f;
     }
     
+    // TODO: prepare actual vertex array using approximations for the bezier lines
     printf("%hu\n", end_pts_of_contours[num_of_contours - 1]);
 
-    free(buf); 
     return vertices;
 }
 

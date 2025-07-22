@@ -3,6 +3,7 @@
 
 #include "lu.h"
 #include "arena.h"
+#include <string.h>
 
 #define S(str) (String){ \
     .size = sizeof(str) - 1, \
@@ -14,8 +15,5 @@ typedef struct String {
 } String;
 
 String str_copy(Arena *, String);
-
-int strcmp(const char *, const char *);
-//void* memcpy(void *, void *, size_t);
 
 #endif /* LU_STRING_H */
