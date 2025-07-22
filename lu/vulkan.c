@@ -1,4 +1,7 @@
+#include <string.h>
+
 #include "vulkan.h"
+#include "arena.h"
 
 #define VK_VALIDATION "VK_LAYER_KHRONOS_validation"
 
@@ -227,10 +230,10 @@ VkDebugReportCallbackEXT register_debug_callback(VkInstance instance) {
     return callback;
 }
 
-VkInstance lu_create_instance(const char *name) {
+VkInstance lu_create_instance(String name) {
     VkApplicationInfo app_info = {
         .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-        .pApplicationName = name,
+        .pApplicationName = name.value,
         .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
         .pEngineName = "No Engine",
         .engineVersion = VK_MAKE_VERSION(1, 0, 0),
@@ -806,7 +809,7 @@ void lu_destroy_vertex_buffer(Window *win) {
     vkFreeMemory(win->renderer.device, win->renderer.vertex_buffer_memory, NULL);
 }
 
-void lu_setup_renderer(Window *win, const char *name) {
+void lu_setup_renderer(Window *win, String name) {
     load_instance_proc_addr();
     VkInstance instance = lu_create_instance(name);
     instance_load_vulkan(instance);

@@ -1,5 +1,7 @@
 #include "window.h"
+#include "xdg-shell.h"
 #include "vulkan.h"
+#include "arena.h"
 
 static void xdg_surface_configure(
         void *data,
@@ -87,7 +89,7 @@ static const struct wl_registry_listener wl_registry_listener = {
 };
 
 // TODO: error handling / recovery
-void lu_setup_wl_window(Window *win, const char *title) {
+void lu_setup_wl_window(Window *win, String title) {
     win->display = wl_display_connect(NULL);
     win->registry = wl_display_get_registry(win->display);
     wl_registry_add_listener(win->registry, &wl_registry_listener, win);
@@ -97,13 +99,13 @@ void lu_setup_wl_window(Window *win, const char *title) {
     win->xdg_surface = xdg_wm_base_get_xdg_surface(win->xdg_wm_base, win->surface);
     win->xdg_toplevel = xdg_surface_get_toplevel(win->xdg_surface);
     xdg_surface_add_listener(win->xdg_surface, &xdg_surface_listener, win);
-    xdg_toplevel_set_title(win->xdg_toplevel, title);
+    xdg_toplevel_set_title(win->xdg_toplevel, title.value);
     xdg_toplevel_add_listener(win->xdg_toplevel, &xdg_toplevel_listener, win);
     wl_surface_commit(win->surface);
 }
 
-Window *lu_create_window(const char *title, u16 width, u16 height) {
-    Window *win = (Window*)malloc(sizeof(Window));
+Window *lu_create_window(Arena *arena, String title, u16 width, u16 height) {
+    Window *win = (Window*)lu_arena_alloc(arena, sizeof(Window));
     win->width = width;
     win->height = height;
 
@@ -122,8 +124,6 @@ void lu_poll_events(Window *win) {
 }
 
 void lu_terminate(Window *win) {
-    lu_free_renderer(win);
-
     xdg_toplevel_destroy(win->xdg_toplevel);
     xdg_surface_destroy(win->xdg_surface);
     xdg_wm_base_destroy(win->xdg_wm_base);
@@ -131,6 +131,5 @@ void lu_terminate(Window *win) {
     wl_compositor_destroy(win->compositor);
     wl_registry_destroy(win->registry);
     wl_display_disconnect(win->display);
-    free(win);
 }
 

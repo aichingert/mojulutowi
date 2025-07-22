@@ -1,13 +1,12 @@
 #ifndef LU_WINDOW_H
 #define LU_WINDOW_H
 
-#include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 
 #include "lu.h"
-
-#include "xdg-shell.h"
+#include "lu_string.h"
+#include "arena.h"
 
 #define VK_NO_PROTOTYPES
 #define VK_USE_PLATFORM_WAYLAND_KHR
@@ -73,9 +72,9 @@ enum WindowFlags {
     WINDOW_CLOSE_BIT = 1 << (0),
 };
 
-Window  *lu_create_window(const char *title, u16 width, u16 height);
-bool    lu_window_should_close(Window *win);
-void    lu_poll_events(Window *win);
-void    lu_terminate(Window *win);
+Window  *lu_create_window(Arena *, String, u16, u16);
+bool    lu_window_should_close(Window *);
+void    lu_poll_events(Window *);
+void    lu_terminate(Window *);
 
 #endif /* LU_WINDOW_H */

@@ -3,6 +3,7 @@
 // References: 
 // https://developer.apple.com/fonts/TrueType-Reference-Manual/RM06/Chap6.html
 // https://learn.microsoft.com/en-us/typography/opentype/spec/cmap
+// https://stackoverflow.com/questions/20733790/truetype-fonts-glyph-are-made-of-quadratic-bezier-why-do-more-than-one-consecu/20772557#20772557
 
 /*
  * shortFrac 	16-bit signed fraction
@@ -251,6 +252,7 @@ Vertex* lu_extract_glyph_from_font(const char *font, u16 code_point, size_t *siz
     u16 end_pts_of_contours[num_of_contours] = {};
     for (s16 i = 0; i < num_of_contours; i++) {
         end_pts_of_contours[i] = ru16(buf, glyf_off); glyf_off += 2;
+        printf("END_OF_CONTOURS: %hd \\ %hd \n", end_pts_of_contours[i], i);
     }
 
     // TODO: ignoring instructions might never use them
@@ -273,10 +275,13 @@ Vertex* lu_extract_glyph_from_font(const char *font, u16 code_point, size_t *siz
     while (i < points) {
         flags[i] = buf[glyf_off++];
 
+        if ((flags[i] & 1) == 1) {
+            printf("ON_CURVE \\ %d\n", i);
+        }
+
         if ((flags[i] & REPEAT_FLAG) == REPEAT_FLAG) {
             u8 times = buf[glyf_off++];
 
-            printf("%hu - repeat: %hu - size: %hu\n", i, times, points);
             assert(i + times < points && "ERROR: flags repeat outside flags array");
             for (u16 j = i + 1; j <= i + times; j++) {
                 flags[j] = flags[i];
@@ -334,17 +339,21 @@ Vertex* lu_extract_glyph_from_font(const char *font, u16 code_point, size_t *siz
     f32 y_denom = (y_max - y_min);
     printf("%f - %f\n", x_denom, y_denom);
 
+    printf("I've got: %lu points\n", *size);
     *size -= 1;
     vertices = &vertices[1];
+
+    // Should use this scaling
+    // pointSize * resolution / (72 points per inch * units_per_em).
 
     for (u16 i = 0; i < *size; i++) {
         /*
         vertices[i].x = (vertices[i].x - x_min) / x_denom;
         vertices[i].y = (vertices[i].y - y_min) / y_denom;
         */
+        printf("x: %f - y: %f\n", vertices[i].x, vertices[i].y);
         vertices[i].x = vertices[i].x / 1000.f;
         vertices[i].y = vertices[i].y / 1000.f;
-        printf("x: %f - y: %f\n", vertices[i].x, vertices[i].y);
     }
     
     printf("%hu\n", end_pts_of_contours[num_of_contours - 1]);
