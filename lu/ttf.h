@@ -11,6 +11,6 @@
 #include "array.h"
 #include "window.h"
 
-ArrayVec2 lu_extract_glyph_from_font(Arena *, String, u16, size_t *);
+ArrayVec2 lu_extract_glyph_from_font(Arena *, String, u16);
 
 #endif /* LU_TTF_H */

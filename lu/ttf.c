@@ -332,13 +332,18 @@ ArrayVec2 read_simple_glyph(Arena *arena, u8 *buf, u64 *glyph_offset, s16 num_of
             lu_array_push(arena, vertices, mid);
         }
 
-        lu_array_push(arena, vertices, next_p);
-        p = next_p; 
+        p = next_p;
+        lu_array_push(arena, vertices, p);
 
-        if (i > 0 && current_end_point < num_of_contours && i != contour_end_pts[current_end_point]) {
+        // TODO: almost there here is a bug :/
+        u64 last_first = current_end_point == 0 ? 0 : contour_end_pts[current_end_point];
+
+        if (i > last_first && current_end_point < num_of_contours && i != contour_end_pts[current_end_point]) {
             u64 pos = vertices.len - 1;
             lu_array_push(arena, vertices, vertices.v[pos]);
-        } else {
+        } else if (i > last_first) {
+            lu_array_push(arena, vertices, vertices.v[last_first]);
+            lu_array_push(arena, vertices, p);
             current_end_point += 1;
         }
     }
@@ -377,7 +382,7 @@ ArrayVec2 read_glyph_table(Arena *arena, u8 *buf, u64 *glyph_offset) {
     return read_simple_glyph(arena, buf, glyph_offset, num_of_contours);
 }
 
-ArrayVec2 lu_extract_glyph_from_font(Arena *arena, String font, u16 code_point, size_t *size) {
+ArrayVec2 lu_extract_glyph_from_font(Arena *arena, String font, u16 code_point) {
     u8 *buf = lu_read_font(arena, font);
 
     u64 read_offset = offsetof(OffsetSubtable, num_tables);

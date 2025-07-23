@@ -9,6 +9,7 @@
 #include <vulkan/vulkan.h>
 
 #include "lu.h"
+#include "array.h"
 #include "string.h"
 #include "window.h"
 
@@ -23,7 +24,7 @@
     } while(0)
 
 void        lu_setup_renderer(Window *, String);
-void        lu_create_vertex_buffer(Window *, Vertex *, size_t);
+void        lu_create_vertex_buffer(Window *, ArrayVec2);
 void        lu_destroy_vertex_buffer(Window *);
 void        lu_recreate_swapchain(Window *);
 void        lu_draw_frame(Window *, size_t);

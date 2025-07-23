@@ -1,5 +1,6 @@
 #include "vulkan.h"
 #include "arena.h"
+#include "math.h"
 #include "mem.h"
 
 #define VK_VALIDATION "VK_LAYER_KHRONOS_validation"
@@ -539,7 +540,7 @@ VkShaderModule lu_create_shader_module(VkDevice device, const char *shader) {
 VkVertexInputBindingDescription vertex_binding_description() {
     VkVertexInputBindingDescription description = {
         .binding = 0,
-        .stride = sizeof(Vertex),
+        .stride = sizeof(Vec2),
         .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
     };
 
@@ -551,7 +552,7 @@ VkVertexInputAttributeDescription vertex_attribute_description() {
         .binding = 0,
         .location = 0,
         .format = VK_FORMAT_R32G32_SFLOAT,
-        .offset = offsetof(Vertex, x),
+        .offset = offsetof(Vec2, x),
     };
 
     return description;
@@ -602,7 +603,7 @@ void lu_create_graphics_pipeline(Window *win) {
 
     VkPipelineInputAssemblyStateCreateInfo input_assembly = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-        .topology = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP,
+        .topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
         .primitiveRestartEnable = VK_FALSE,
     };
 
@@ -765,12 +766,12 @@ u32 find_memory_type(
     return 0;
 }
 
-void lu_create_vertex_buffer(Window *win, Vertex *vertices, size_t size) {
+void lu_create_vertex_buffer(Window *win, ArrayVec2 vertices) {
     VkRenderer *vk = &win->renderer;
 
     VkBufferCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .size = sizeof(Vertex) * size,
+        .size = ArrayItemSize(vertices) * vertices.len,
         .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
     };
@@ -795,7 +796,7 @@ void lu_create_vertex_buffer(Window *win, Vertex *vertices, size_t size) {
 
     void *data = NULL;
     vkMapMemory(vk->device, vertex_buffer_memory, 0, create_info.size, 0, &data);
-    lu_memcpy(data, vertices, create_info.size);
+    lu_memcpy(data, vertices.v, create_info.size);
     vkUnmapMemory(vk->device, vertex_buffer_memory);
 
     vk->vertex_buffer = vertex_buffer;
