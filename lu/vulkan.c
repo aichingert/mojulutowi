@@ -1,7 +1,6 @@
-#include <string.h>
-
 #include "vulkan.h"
 #include "arena.h"
+#include "mem.h"
 
 #define VK_VALIDATION "VK_LAYER_KHRONOS_validation"
 
@@ -182,7 +181,7 @@ bool validation_layers_are_available() {
     vkEnumerateInstanceLayerProperties(&layer_count, available_layers);
 
     for (u32 i = 0; i < layer_count; i++) {
-        if (strcmp(available_layers[i].layerName, VK_VALIDATION) == 0) return true;
+        if (lu_char_cmp(available_layers[i].layerName, VK_VALIDATION) == 0) return true;
     }
 
     return false;
@@ -332,7 +331,7 @@ void pick_suitable_device(Window *win) {
         supported = false;
 
         for (u32 i = 0; i < property_count; i++) {
-            if (strcmp("VK_KHR_dynamic_rendering", ext_props[i].extensionName) == 0) {
+            if (lu_char_cmp("VK_KHR_dynamic_rendering", ext_props[i].extensionName) == 0) {
                 supported = true;
                 break;
             }
@@ -796,7 +795,7 @@ void lu_create_vertex_buffer(Window *win, Vertex *vertices, size_t size) {
 
     void *data = NULL;
     vkMapMemory(vk->device, vertex_buffer_memory, 0, create_info.size, 0, &data);
-    memcpy(data, vertices, create_info.size);
+    lu_memcpy(data, vertices, create_info.size);
     vkUnmapMemory(vk->device, vertex_buffer_memory);
 
     vk->vertex_buffer = vertex_buffer;

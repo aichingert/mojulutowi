@@ -3,17 +3,18 @@
 
 #include "lu.h"
 #include "arena.h"
-#include <string.h>
 
 #define S(str) (String){ \
-    .size = sizeof(str) - 1, \
+    .len = sizeof(str) - 1, \
     .value = str } \
 
 typedef struct String {
-    u64  size;
+    u64  len;
     char *value;
 } String;
 
-String str_copy(Arena *, String);
+s8      lu_char_cmp(const char *, const char *);
+s8      lu_str_cmp (String, String);
+String  lu_str_copy(Arena *, String);
 
 #endif /* LU_STRING_H */

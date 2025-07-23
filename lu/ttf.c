@@ -1,8 +1,5 @@
-#include <string.h>
-
 #include "ttf.h"
 #include "arena.h"
-#include "lu_string.h"
 
 // References: 
 // https://developer.apple.com/fonts/TrueType-Reference-Manual/RM06/Chap6.html
@@ -18,16 +15,31 @@
  * longDateTime The long internal format of a date in seconds since 12:00 midnight, January 1, 1904. It is represented as a signed 64-bit integer.
 */
 
-#define ru16(buf, off) ((u16)buf[off] << 8) | ((u16)buf[off + 1])
-#define ru32(buf, off) ((u32)buf[off] << 24) | ((u32)buf[off + 1] << 16) | ((u32)buf[off + 2] << 8) | ((u32)buf[off + 3])
-#define ru64(buf, off) (((u64)ru32(buf, off)) << (u64)32) | ((u64)ru32(buf, off + 4))
-
 #define ON_CURVE                                0b00000001
 #define X_SHORT_VECTOR                          0b00000010
 #define Y_SHORT_VECTOR                          0b00000100
 #define REPEAT_FLAG                             0b00001000
 #define X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR    0b00010000
 #define Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR    0b00100000
+
+#define ru16(buf, off) ((u16)buf[off] << 8) | ((u16)buf[off + 1])
+#define ru32(buf, off) (((u32)ru16(buf, off)) << (u32)16) | ((u32)ru16(buf, off + 2))
+#define ru64(buf, off) (((u64)ru32(buf, off)) << (u64)32) | ((u64)ru32(buf, off + 4))
+
+typedef struct OffsetSubtable {
+    u32 scaler_type;
+    u16 num_tables;
+    u16 search_range;
+    u16 entry_selector;
+    u16 range_shift;
+} OffsetSubtable;
+
+typedef struct TableDirectory {
+    u32 tag;
+    u32 checksum;
+    u32 offset;
+    u32 length;
+} TableDirectory;
 
 // TODO: should make custom file functions
 u8* lu_read_font(Arena *arena, String font) {
@@ -48,20 +60,10 @@ u8* lu_read_font(Arena *arena, String font) {
     return buf;
 }
 
-typedef struct OffsetSubtable {
-    u32 scaler_type;
-    u16 num_tables;
-    u16 search_range;
-    u16 entry_selector;
-    u16 range_shift;
-} OffsetSubtable;
-
 Vertex* lu_extract_glyph_from_font(Arena *arena, String font, u16 code_point, size_t *size) {
     u8 *buf = lu_read_font(arena, font);
 
-    printf("OffsetSubtable: %u - %hu/%hu\n", subtable.scaler_type, subtable.num_tables, ptables);
-
-        // offset table - table
+    // offset table - table
     u32 scaler = buf[0] << 24 | buf[1] << 16 | buf[2] << 8 | buf[3];
     u32 skip = sizeof(OffsetSubtable);
 

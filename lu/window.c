@@ -1,7 +1,5 @@
 #include "window.h"
-#include "xdg-shell.h"
 #include "vulkan.h"
-#include "arena.h"
 
 static void xdg_surface_configure(
         void *data,
@@ -66,9 +64,9 @@ static void registry_global(
 {
     Window *window = data;
 
-    if        (strcmp(interface, wl_compositor_interface.name) == 0) {
+    if        (lu_char_cmp(interface, wl_compositor_interface.name) == 0) {
         window->compositor = wl_registry_bind(wl_registry, name, &wl_compositor_interface, 4);
-    } else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
+    } else if (lu_char_cmp(interface, xdg_wm_base_interface.name) == 0) {
         window->xdg_wm_base = wl_registry_bind(wl_registry, name, &xdg_wm_base_interface, 1);
         xdg_wm_base_add_listener(window->xdg_wm_base, &xdg_wm_base_listener, window);
     }

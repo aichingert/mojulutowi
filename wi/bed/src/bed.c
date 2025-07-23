@@ -2,7 +2,7 @@
 #include "vulkan.h"
 #include "window.h"
 #include "arena.h"
-#include "lu_string.h"
+#include "string.h"
 
 int main(void) {
     Arena *app = lu_arena_init(64'000);

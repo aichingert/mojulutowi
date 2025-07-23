@@ -4,13 +4,15 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include "lu.h"
-#include "lu_string.h"
-#include "arena.h"
-
 #define VK_NO_PROTOTYPES
 #define VK_USE_PLATFORM_WAYLAND_KHR
 #include <vulkan/vulkan.h>
+
+#include "lu.h"
+#include "arena.h"
+#include "string.h"
+
+#include "xdg-shell.h"
 
 #define MAX_FRAMES_BETWEEN 2
 

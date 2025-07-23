@@ -9,7 +9,7 @@
 #include <vulkan/vulkan.h>
 
 #include "lu.h"
-#include "lu_string.h"
+#include "string.h"
 #include "window.h"
 
 #define VK_CHECK(call) \

@@ -7,6 +7,7 @@
 #include <stdio.h>
 
 #include "lu.h"
+#include "string.h"
 #include "window.h"
 
 Vertex *lu_extract_glyph_from_font(Arena *, String, u16, size_t *);
