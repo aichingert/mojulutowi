@@ -11,7 +11,7 @@ int main(void) {
     Window *win = lu_create_window(app, S("bed"), 640, 480);
 
     size_t len = 0;
-    String font = S("/home/pha/ext/nerd-fonts/src/unpatched-fonts/Iosevka/Iosevka-Medium.ttf");
+    String font = S("/home/booz/ext/nerd-fonts/src/unpatched-fonts/Iosevka/Iosevka-Medium.ttf");
     // /home/booz/ext/nerd-fonts/src/unpatched-fonts/Arimo/Regular/Arimo-Regular.ttf
     //const char *font = "/home/booz/ext/nerd-fonts/src/unpatched-fonts/Arimo/Regular/Arimo-Regular.ttf";
     // TODO: jetbrains mono

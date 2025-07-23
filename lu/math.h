@@ -21,4 +21,6 @@ typedef struct Vec4 {
     f32 w;
 } Vec4;
 
+Vec2 lerp_v2(Vec2, Vec2, f32);
+
 #endif /* LU_MATH_H */

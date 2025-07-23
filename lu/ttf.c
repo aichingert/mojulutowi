@@ -1,6 +1,7 @@
 #include "ttf.h"
 #include "arena.h"
 #include "mem.h"
+#include "math.h"
 #include "array.h"
 
 // References: 
@@ -253,10 +254,38 @@ u16 read_glyph_id_from_cmap_table(u8 *buf, TableDirectory cmap, u16 code_point) 
     return 0;
 }
 
+void read_simple_coordinates(
+        u8  *buf, 
+        u64 *glyph_offset, 
+        s16 *coordinates, 
+        u8  *flags, 
+        u16 points, 
+        u8  vec_flag, 
+        u8  same_flag) 
+{
+    u8 pair = vec_flag | same_flag;
+
+    for (u16 i = 0; i < points; i++) {
+        s16 v = 0;
+
+        if          ((flags[i] & pair) == pair) {
+            v = buf[(*glyph_offset)++];
+        } else if   ((flags[i] & vec_flag) == vec_flag) {
+            v = -((s16)buf[(*glyph_offset)++]);
+        } else if   ((flags[i] & same_flag) == 0) {
+            v = consume_u16(buf, glyph_offset, 0);
+        }
+
+        coordinates[i] = v;
+    }
+}
+
 ArrayVec2 read_simple_glyph(Arena *arena, u8 *buf, u64 *glyph_offset, s16 num_of_contours) {
     assert(num_of_contours > 0 && "Error: no contours for simple glyph");
 
     u16 contour_end_pts[num_of_contours] = {};
+    u16 current_end_point = 0;
+
     for (u16 i = 0; i < num_of_contours; i++) {
         contour_end_pts[i] = consume_u16(buf, glyph_offset, 0);
         printf("CONTOUR ENDS WITH POINTS: %hu\n", contour_end_pts[i]);
@@ -267,15 +296,14 @@ ArrayVec2 read_simple_glyph(Arena *arena, u8 *buf, u64 *glyph_offset, s16 num_of
     *glyph_offset += instr_len;
 
     u16 points = contour_end_pts[num_of_contours - 1] + 1;
-    s16 value = 0;
-
-    u8 flags[points] = {};
-    ArrayVec2 vertices = {
+    u8          flags[points] = {};
+    s16         x_coordinates[points] = {};
+    s16         y_coordinates[points] = {};
+    ArrayVec2   vertices = {
         .cap    = points * 3,
         .v      = lu_arena_alloc(arena, sizeof(Vec2) * points * 2),
     };
-
-    printf("%hu\n", points);
+    
     for (u16 i = 0; i < points; i++) {
         flags[i] = buf[(*glyph_offset)++];
 
@@ -288,110 +316,46 @@ ArrayVec2 read_simple_glyph(Arena *arena, u8 *buf, u64 *glyph_offset, s16 num_of
         }
     }
 
-    u8 pair = X_SHORT_VECTOR | X_IS_SAME;
+    read_simple_coordinates(buf, glyph_offset, x_coordinates, flags, points, X_SHORT_VECTOR, X_IS_SAME);
+    read_simple_coordinates(buf, glyph_offset, y_coordinates, flags, points, Y_SHORT_VECTOR, Y_IS_SAME);
+ 
+    Vec2 p = {0};
 
     for (u16 i = 0; i < points; i++) {
-        Vec2 vector = {0};
+        Vec2 next_p = {
+            .x = p.x + (f32)x_coordinates[i],
+            .y = p.y + (f32)y_coordinates[i],
+        };
 
-        if          ((flags[i] & pair) == pair) {
-            vector.x = buf[(*glyph_offset)++];
-        } else if   ((flags[i] & X_SHORT_VECTOR) == X_SHORT_VECTOR) {
-            vector.x = -((s16)buf[(*glyph_offset)++]);
-        } else if   ((flags[i] & X_IS_SAME) == X_IS_SAME) {
-            vector.x = i == 0 ? 0.0 : vertices.v[i - 1].x;
+        if (i > 0 && (flags[i] & ON_CURVE) == 0 && (flags[i - 1] & ON_CURVE) == 0) {
+            Vec2 mid = lerp_v2(p, next_p, 0.5);
+            lu_array_push(arena, vertices, mid);
+        }
+
+        lu_array_push(arena, vertices, next_p);
+        p = next_p; 
+
+        if (i > 0 && current_end_point < num_of_contours && i != contour_end_pts[current_end_point]) {
+            u64 pos = vertices.len - 1;
+            lu_array_push(arena, vertices, vertices.v[pos]);
         } else {
-            vector.x = consume_u16(buf, glyph_offset, 0);
-        }
-
-        printf("%hhu ", flags[i] & ON_CURVE);
-        lu_array_push(arena, vertices, vector);
-    }
-    printf("\n");
-
-    for (u16 i = 0; i < points; i++) {
-        printf("%f\n", vertices.v[i].x);
-    }
-
-    /*
-    for (u16 i = 0; i < points; i++) {
-        if          ((flags[i] & pair) == pair) {
-            vertices[i]
-            lu_array_push(arena, vertices, (Vec2){ .x = buf[(*glyph_offset)++] });
-        } else if   ((flags[i] & X_SHORT_VECTOR) == X_SHORT_VECTOR) {
-            lu_array_push(arena, vertices, (Vec2){ .x = -((s16)buf[(*glyph_offset)++]) });
-        } else if   ((flags[i] & X_IS_SAME) == X_IS_SAME) {
-            lu_array_push(arena, vertices, (Vec2){ .x = i == 0 ? 0.0 : vertices[i - 1].x });
-        } else {
-            lu_array_push(arena, vertices, (Vec2){ .x = consume_u16(buf, glyph_offset, 0) });
+            current_end_point += 1;
         }
     }
 
-
-    for (u16 i = 0; i < points; i++) {
-        switch (flags[i] & (X_SHORT_VECTOR | X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR)) {
-            case X_SHORT_VECTOR:
-                value = -((s16)buf[glyf_off++]) + x_err;
-                vertices[i + 1].x = ((f32)value) + vertices[i].x;
-                break;
-            case X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR:
-                vertices[i + 1].x = vertices[i].x;
-                break;
-            case X_SHORT_VECTOR | X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR:
-                value = ((s16)buf[glyf_off++]) + x_err;
-                vertices[i + 1].x = ((f32)value) + vertices[i].x;
-                break;
-            default:
-                value = ((s16)ru16(buf, glyf_off)) + x_err; glyf_off += 2;
-                vertices[i + 1].x = ((f32)value) + vertices[i].x;
-                break;
-        }
+    for (u64 i = 0; i < vertices.len; i++) {
+        vertices.v[i].x /= 1000.0f;
+        vertices.v[i].y /= 1000.0f;
+        printf("%f - %f\n", vertices.v[i].x, vertices.v[i].y);
     }
+    printf("%hu - %lu\n", points, vertices.len);
 
-    for (u16 i = 0; i < points; i++) {
-        switch (flags[i] & (Y_SHORT_VECTOR | Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR)) {
-            case Y_SHORT_VECTOR:
-                value = -((s16)buf[glyf_off++]) + x_err;
-                vertices[i + 1].y = ((f32)value) + vertices[i].y;
-                break;
-            case Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR:
-                vertices[i + 1].y = vertices[i].y;
-                break;
-            case Y_SHORT_VECTOR | Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR:
-                value = ((s16)buf[glyf_off++]) + x_err;
-                vertices[i + 1].y = ((f32)value) + vertices[i].y;
-                break;
-            default:
-                value = ((s16)ru16(buf, glyf_off)) + x_err; glyf_off += 2;
-                vertices[i + 1].y = ((f32)value) + vertices[i].y;
-                break;
-        }
-    }
-
-    f32 x_denom = (x_max - x_min);
-    f32 y_denom = (y_max - y_min);
-    printf("%f - %f\n", x_denom, y_denom);
-
-    printf("I've got: %lu points\n", *size);
-    *size -= 1;
-    vertices = &vertices[1];
-
-    // Should use this scaling
-    // pointSize * resolution / (72 points per inch * units_per_em).
-
-    for (u16 i = 0; i < *size; i++) {
-        printf("x: %f - y: %f\n", vertices[i].x, vertices[i].y);
-        vertices[i].x = vertices[i].x / 1000.f;
-        vertices[i].y = vertices[i].y / 1000.f;
-    }
-    
-    // TODO: prepare actual vertex array using approximations for the bezier lines
-    printf("%hu\n", end_pts_of_contours[num_of_contours - 1]);
-    */
     return vertices;
 }
 
+// TODO: implement
 void read_compound_glyph(u8 *buf, u64 *glyph_offset) {
-
+    assert(false && "TODO: implement compound glyphs");
 }
 
 ArrayVec2 read_glyph_table(Arena *arena, u8 *buf, u64 *glyph_offset) {
@@ -434,17 +398,4 @@ ArrayVec2 lu_extract_glyph_from_font(Arena *arena, String font, u16 code_point, 
 
     return read_glyph_table(arena, buf, &glyph_id_offset);
 }
-
-/* 
- * Q
- * table directory
- * ===============
- * Type 	Name 	    Description
- * uint32 	tag 	    4-byte identifier
- * uint32 	checkSum 	checksum for this table
- * uint32 	offset 	    offset from beginning of sfnt
- * uint32 	length 	    length of this table in byte (actual length not padded length)
-void lu_parse_table_directory() {
-}
-*/ 
 
