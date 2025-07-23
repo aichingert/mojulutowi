@@ -1,5 +1,6 @@
 #include "ttf.h"
 #include "arena.h"
+#include "mem.h"
 
 // References: 
 // https://developer.apple.com/fonts/TrueType-Reference-Manual/RM06/Chap6.html
@@ -26,6 +27,17 @@
 #define ru32(buf, off) (((u32)ru16(buf, off)) << (u32)16) | ((u32)ru16(buf, off + 2))
 #define ru64(buf, off) (((u64)ru32(buf, off)) << (u64)32) | ((u64)ru32(buf, off + 4))
 
+#define CONSUME_FUNC(type) \
+    static inline type consume_ ## type(u8 *buf, u64 *read_offset, u64 skip) { \
+        type val = r ## type(buf, *read_offset); \
+        *read_offset += sizeof(type) + skip; \
+        return val; \
+    } \
+
+CONSUME_FUNC(u16)
+CONSUME_FUNC(u32)
+CONSUME_FUNC(u64)
+
 typedef struct OffsetSubtable {
     u32 scaler_type;
     u16 num_tables;
@@ -40,6 +52,16 @@ typedef struct TableDirectory {
     u32 offset;
     u32 length;
 } TableDirectory;
+
+// TODO: might want to use a macro for this when I know how
+#define TABLE_SIZE 4
+typedef enum TableDefinitions {
+    HEAD = 0,
+    LOCA = 1,
+    CMAP = 2,
+    GLYF = 3,
+} TableDefinitions;
+static const u32 TAGS[TABLE_SIZE] = { ru32("head", 0),ru32("loca", 0), ru32("cmap", 0), ru32("glyf", 0) };
 
 // TODO: should make custom file functions
 u8* lu_read_font(Arena *arena, String font) {
@@ -60,156 +82,152 @@ u8* lu_read_font(Arena *arena, String font) {
     return buf;
 }
 
-Vertex* lu_extract_glyph_from_font(Arena *arena, String font, u16 code_point, size_t *size) {
-    u8 *buf = lu_read_font(arena, font);
+void read_table_directory(
+        u8 *buf, 
+        u64 *read_offset, 
+        u16 num_tables, 
+        TableDirectory *tables) 
+{
+    for (u16 i = 0; i < num_tables; i++) {
+        TableDirectory table = {
+            .tag        = consume_u32(buf, read_offset, 0),
+            .checksum   = consume_u32(buf, read_offset, 0),
+            .offset     = consume_u32(buf, read_offset, 0),
+            .length     = consume_u32(buf, read_offset, 0),
+        };
 
-    // offset table - table
-    u32 scaler = buf[0] << 24 | buf[1] << 16 | buf[2] << 8 | buf[3];
-    u32 skip = sizeof(OffsetSubtable);
+        if (table.tag != TAGS[HEAD]) {
+            u32 sum = 0;
+            u32 n_longs = (table.length + 3) / 4;
 
-    if (scaler == 0x00010000) {
-        printf("adobe - microsoft\n");
-    }
+            for (u32 j = 0; j < n_longs; j++) {
+                sum += ru32(buf, table.offset + 4 * j);
+            }
 
-    // table directory - table
-    u32 cmap_tag = ((u32)'c') << 24 | ((u32)'m') << 16 | ((u32)'a') << 8 | ((u32)'p');
-    u32 cmap_off = 0;
-    u32 head_tag = ((u32)'h') << 24 | ((u32)'e') << 16 | ((u32)'a') << 8 | ((u32)'d');
-    u32 head_off = 0;
-    u32 loca_tag = ((u32)'l') << 24 | ((u32)'o') << 16 | ((u32)'c') << 8 | ((u32)'a');
-    u32 loca_off = 0;
-    u32 glyf_tag = ((u32)'g') << 24 | ((u32)'l') << 16 | ((u32)'y') << 8 | ((u32)'f');
-    u32 glyf_off = 0;
-
-    u16 tables = buf[4] << 8 | buf[5];
-    printf("TABLES: %hu\n", tables);
-
-    for (u16 i = 0; i < tables; i++) {
-        u32 tag = ru32(buf, skip); skip += 4;
-        skip += 4; // TODO: check checksum
-
-        if        (tag == cmap_tag) {
-            cmap_off = ru32(buf, skip);
-        } else if (tag == head_tag) {
-            head_off = ru32(buf, skip);
-        } else if (tag == loca_tag) {
-            loca_off = ru32(buf, skip);
-        } else if (tag == glyf_tag) {
-            glyf_off = ru32(buf, skip);
+            if (sum != table.checksum) assert(false && "checksum missmatch");
         }
 
-        skip += 8; // len and offset skip
+        if        (table.tag == TAGS[HEAD]) {
+            tables[HEAD] = table;
+        } else if (table.tag == TAGS[LOCA]) {
+            tables[LOCA] = table;
+        } else if (table.tag == TAGS[CMAP]) {
+            tables[CMAP] = table;
+        } else if (table.tag == TAGS[GLYF]) {
+            tables[GLYF] = table;
+        }
     }
+}
 
-    // head - table
-    u16 maj_version = ru16(buf, head_off); head_off += 2; 
-    u16 min_version = ru16(buf, head_off); head_off += 2; 
-    u32 font_revision = ru32(buf, head_off); head_off += 4;
-    u32 check_sum = ru32(buf, head_off); head_off += 4;
-    u32 magic_num = ru32(buf, head_off); head_off += 4;
-    assert(magic_num == 0x5F0F3CF5);
-    u16 header_flags = ru16(buf, head_off); head_off += 2;
-    u16 units_per_em = ru16(buf, head_off); head_off += 2;
-    u64 created = ru64(buf, head_off); head_off += 8;
-    u64 modified = ru64(buf, head_off); head_off += 8;
-    s16 header_x_min = ru16(buf, head_off); head_off += 2;
-    s16 header_y_min = ru16(buf, head_off); head_off += 2;
-    s16 header_x_max = ru16(buf, head_off); head_off += 2;
-    s16 header_y_max = ru16(buf, head_off); head_off += 2;
-    u16 mac_style = ru16(buf, head_off); head_off += 2;
-    u16 lowest_rec_ppem = ru16(buf, head_off); head_off += 2;
-    s16 font_direction_hint = ru16(buf, head_off); head_off += 2;
-    s16 index_to_loc_format = ru16(buf, head_off); head_off += 2;
-    s16 glyph_data_format = ru16(buf, head_off); head_off += 2;
+// TODO: figure out what to do with the data
+void read_head_table(u8 *buf, TableDirectory head) {
+    u64 read_offset = head.offset;
 
-    printf("HEADER \n");
-    printf("VERSION: %hu.%hu\n", maj_version, min_version);
-    printf("ignored: %u\n", font_revision & check_sum & header_flags & units_per_em
-            & mac_style & lowest_rec_ppem & font_direction_hint & glyph_data_format);
+    u16 maj_version         = consume_u16(buf, &read_offset, 0);
+    u16 min_version         = consume_u16(buf, &read_offset, 0);
+    u32 font_revision       = consume_u32(buf, &read_offset, 0);
+    u32 checksum            = consume_u32(buf, &read_offset, 0);
+    assert(0x5F0F3CF5 ==      consume_u32(buf, &read_offset, 0) && "Error: magic number in header is incorrect");
+    u16 header_flags        = consume_u16(buf, &read_offset, 0);
+    u16 uints_per_em        = consume_u16(buf, &read_offset, 0);
+    u64 created             = consume_u64(buf, &read_offset, 0);
+    u64 modified            = consume_u64(buf, &read_offset, 0);
+
+    s16 global_x_min        = consume_u16(buf, &read_offset, 0);
+    s16 global_y_min        = consume_u16(buf, &read_offset, 0);
+    s16 global_x_max        = consume_u16(buf, &read_offset, 0);
+    s16 global_y_max        = consume_u16(buf, &read_offset, 0);
+    u16 mac_style           = consume_u16(buf, &read_offset, 0);
+    u16 lowest_rec_ppem     = consume_u16(buf, &read_offset, 0);
+    s16 font_direction_hint = consume_u16(buf, &read_offset, 0);
+    s16 index_to_loc_format = consume_u16(buf, &read_offset, 0);
+    s16 glyph_data_format   = consume_u16(buf, &read_offset, 0);
+
+    printf("Font version: %hu.%hu\n", maj_version, min_version);
     printf("created: %lu - modified %lu\n", created, modified);
-    printf("index to loc format: %hd\n", index_to_loc_format);
-    printf("coords min: x [\t%hd ] | y [\t%hd ]\n", header_x_min, header_y_min);
-    printf("coords max: x [\t%hd ] | y [\t%hd ]\n", header_x_max, header_y_max);
+    printf("global bounds: \n");
+    printf("    x: min(\t%hd)\tmax(\t%hd)\n", global_x_min, global_x_max);
+    printf("    y: min(\t%hd)\tmax(\t%hd)\n", global_y_min, global_y_max);
 
-    assert(index_to_loc_format == 1 && "TODO: change read 32 and 16 byte function for loca lookup");
-    u16 loca_offset_size = 4;
+    (void)font_revision;
+    (void)checksum;
+    (void)lowest_rec_ppem;
+    (void)mac_style;
+    (void)uints_per_em;
+    (void)header_flags;
+    (void)font_direction_hint;
+    (void)glyph_data_format;
 
-    // cmap - table 
+    return index_to_loc_format == 0 ? sizeof(u16) : sizeof(u32);
+}
 
-    u32 offset = cmap_off;
-    u32 format4_off = 0;
+u16 read_glyph_id_from_cmap_table(u8 *buf, TableDirectory cmap, u16 code_point) {
+    u64 read_offset = cmap.offset;
+    u16 version     = consume_u16(buf, &read_offset, 0);
+    u16 subtables   = consume_u16(buf, &read_offset, 0);
 
-    u16 version = ru16(buf, offset); offset += 2;
-    u16 subtables = ru16(buf, offset); offset += 2;
+    printf("CMAP-Version: %hu - num_subtables: %hu\n", version, subtables);
+    u64 format_4_offset = 0;
 
-    printf("version: %hu - subtables: %hu\n", version, subtables);
-
-    // TODO: ugly but for now search for format4 in cmaps
     for (u16 i = 0; i < subtables; i++) {
-        u16 plat_id = ru16(buf, offset);
-        u16 plat_spec_id = ru16(buf, offset + 2);
-        u32 sub_offset = ru32(buf, offset + 4);
-        offset += 8;
+        u16 platform_id             = consume_u16(buf, &read_offset, 0);
+        u16 platform_specific_id    = consume_u16(buf, &read_offset, 0);
+        u32 subtable_offset         = consume_u32(buf, &read_offset, 8);
+        (void)platform_id;
+        (void)platform_specific_id;
+        (void)subtable_offset;
 
-        u32 off = cmap_off + sub_offset;
-        u16 format = ru16(buf, off);
+        u64 format_offset = cmap.offset + subtable_offset;
+        u16 format = consume_u16(buf, &format_offset, 0);
 
-        printf("PLAT_ID: %hu \t| PLAT_SPEC_ID: %hu \t| OFFSET: %u\n", plat_id, plat_spec_id, sub_offset);
         if (format == 4) {
-            format4_off = off;
+            format_4_offset = format_offset;
+            break;
         }
     }
 
-    if (format4_off == 0) {
-        assert(false && "ERROR: font has no format4 encoding");
-    }
+    assert(format_4_offset != 0 && "Error: font does not contain a format 4 encoding");
 
-    u16 format = ru16(buf, format4_off); format4_off += 2;
-    assert(format == 4);
-    ru16(buf, format4_off); format4_off += 2; // length
+    u16 length      = consume_u16(buf, &format_4_offset, 0); (void)length;
+    u16 language    = consume_u16(buf, &format_4_offset, 0);
+    assert(language == 0 && "Error: mac language is not zero");
 
-    u16 lang = ru16(buf, format4_off); format4_off += 2; // mac specific
-    assert(lang == 0);
-    u16 seg_count_x2 = ru16(buf, format4_off); format4_off += 2;
+    u16 seg_count_x2 = consume_u16(buf, &format_4_offset, 0);
     u16 seg_count = seg_count_x2 / 2;
 
-    ru16(buf, format4_off); format4_off += 2;
-    ru16(buf, format4_off); format4_off += 2;
-    ru16(buf, format4_off); format4_off += 2;
+    u16 a = consume_u16(buf, &format_4_offset, 0); (void)a;
+    u16 b = consume_u16(buf, &format_4_offset, 0); (void)b;
+    u16 c = consume_u16(buf, &format_4_offset, 0); (void)c;
 
-    u16 end_codes[seg_count] = {};
-    u16 start_codes[seg_count] = {};
-    u16 id_deltas[seg_count] = {};
+    u16 end_codes[seg_count]        = {};
+    u16 start_codes[seg_count]      = {};
+    u16 id_deltas[seg_count]        = {};
     u16 id_range_offsets[seg_count] = {};
 
     for (u16 i = 0; i < seg_count; i++) {
-        end_codes[i] = ru16(buf, format4_off); format4_off += 2;
+        end_codes[i] = consume_u16(buf, &format_4_offset, 0);
     }
     assert(end_codes[seg_count - 1] == 0xFFFF);
 
-    u16 pad = ru16(buf, format4_off); format4_off += 2; // reserve pad
-    assert(pad == 0);
+    u16 padding = consume_u16(buf, &format_4_offset, 0);
+    assert(padding == 0 && "Error: padding is not zero in CMAP");
 
     for (u16 i = 0; i < seg_count; i++) {
-        start_codes[i] = ru16(buf, format4_off); format4_off += 2;
+        start_codes[i] = consume_u16(buf, &format_4_offset, 0);
     }
     for (u16 i = 0; i < seg_count; i++) {
-        id_deltas[i] = ru16(buf, format4_off); format4_off += 2;
+        id_deltas[i] = consume_u16(buf, &format_4_offset, 0);
     }
 
-    u16 id_range_offset_pos = format4_off;
-
+    u16 id_range_offset_pos = format_4_offset;
     for (u16 i = 0; i < seg_count; i++) {
-        id_range_offsets[i] = ru16(buf, format4_off); format4_off += 2;
+        id_range_offsets[i] = consume_u16(buf, &format_4_offset, 0);
     }
-
-    u16 glyph_id   = 0;
 
     for (u16 i = 0; i < seg_count; i++) {
         if (end_codes[i] >= code_point && start_codes[i] < code_point) {
-            if (id_range_offsets[i] == 0) {
-                glyph_id = code_point + id_deltas[i];
-                break;
+            if        (id_range_offsets[i] == 0) {
+                return code_point + id_deltas[i];
             } else if (id_range_offsets[i] == 0xFFFF) {
                 assert(false && "ERROR: malformed font");
             }
@@ -223,70 +241,33 @@ Vertex* lu_extract_glyph_from_font(Arena *arena, String font, u16 code_point, si
                 for (u8 j = 0; j < 200; j++) {
                     printf("MISSING GLYPH\n");
                 }
-                break;
+                return 0;
             }
 
-            glyph_id = buf[pos] + id_deltas[i];
-            break;
+            return buf[pos] + id_deltas[i];
         }
     }
 
-    // loca - table
-    // used to identify offset into the glyf table
-    printf("%u - %hu - %hu\n", loca_off, glyph_id, loca_offset_size);
+    assert(false && "Error: not even missing glyph id found");
+    return 0;
+}
 
-    u32 glyph_id_offset = ru32(buf, loca_off + glyph_id * loca_offset_size);
-    printf("glyph_id: %hu - offset: %hu\n", glyph_id, glyph_id_offset);
+void read_simple_glyph(u8 *buf, u64 *glyph_offset, s16 num_of_contours) {
+    assert(num_of_contours > 0 && "Error: no contours for simple glyph");
 
-    // glyf - table
-    glyf_off += (u32)glyph_id_offset;
-
-    s16 num_of_contours = ru16(buf, glyf_off); glyf_off += 2;
-    s16 x_min           = ru16(buf, glyf_off); glyf_off += 2;
-    s16 y_min           = ru16(buf, glyf_off); glyf_off += 2;
-    s16 x_max           = ru16(buf, glyf_off); glyf_off += 2;
-    s16 y_max           = ru16(buf, glyf_off); glyf_off += 2;
-    s16 x_err = 0;
-    s16 y_err = 0;
-
-    if (x_min < 0) {
-        x_err = -x_min;
-        x_max += x_err;
-        x_min = 0;
-    } else if (x_min > 0) {
-        x_min = 0;
-    }
-    if (y_min < 0) {
-        y_err = -y_min;
-        y_max += y_err;
-        y_min = 0;
-    } else if (y_min > 0) {
-        y_min = 0;
+    u16 contour_end_pts[num_of_contours] = {};
+    for (u16 i = 0; i < num_of_contours; i++) {
+        contour_end_pts[i] = consume_u16(buf, glyph_offset, 0);
     }
 
-    printf("contours: %hd\n", num_of_contours);
-    printf("y: %hd - %hd | x: %hd - %hd\n", y_min, y_max, x_min, x_max);
+    // NOTE: ignoring instructions might never use them
+    u16 instr_len = consume_u16(buf, glyph_offset, 0);
+    *glyph_offset += instr_len;
 
-    if (num_of_contours < 0) {
-        assert(false && "TODO: compound glyhs are not yet supported!");
-    }
+    u16 points = contour_end_pts[num_of_contours - 1] + 1;
 
-    // TODO: consider contours and not just use everything like a thing with one contour
-    u16 end_pts_of_contours[num_of_contours] = {};
-    for (s16 i = 0; i < num_of_contours; i++) {
-        end_pts_of_contours[i] = ru16(buf, glyf_off); glyf_off += 2;
-        printf("END_OF_CONTOURS: %hd \\ %hd \n", end_pts_of_contours[i], i);
-    }
-
-    // TODO: ignoring instructions might never use them
-    u16 instr_len = ru16(buf, glyf_off); glyf_off += 2;
-    glyf_off += instr_len;
-
-    u16 points = end_pts_of_contours[num_of_contours - 1] + 1;
-    printf("LEN: %hu\n", points);
     u8 flags[points] = {};
-
-    *size = points + 1;
+    
     // TODO: use dynamic arrays and insert the mid points of the bezier curves
     Vertex *vertices = (Vertex*)malloc(sizeof(Vertex) * (points + 1) * 2);
     vertices[0] = (Vertex){
@@ -371,10 +352,6 @@ Vertex* lu_extract_glyph_from_font(Arena *arena, String font, u16 code_point, si
     // pointSize * resolution / (72 points per inch * units_per_em).
 
     for (u16 i = 0; i < *size; i++) {
-        /*
-        vertices[i].x = (vertices[i].x - x_min) / x_denom;
-        vertices[i].y = (vertices[i].y - y_min) / y_denom;
-        */
         printf("x: %f - y: %f\n", vertices[i].x, vertices[i].y);
         vertices[i].x = vertices[i].x / 1000.f;
         vertices[i].y = vertices[i].y / 1000.f;
@@ -382,8 +359,49 @@ Vertex* lu_extract_glyph_from_font(Arena *arena, String font, u16 code_point, si
     
     // TODO: prepare actual vertex array using approximations for the bezier lines
     printf("%hu\n", end_pts_of_contours[num_of_contours - 1]);
+}
 
-    return vertices;
+void read_compound_glyph(u8 *buf, u64 *glyph_offset) {
+
+}
+
+void read_glyph_table(u8 *buf, u64 *glyph_offset) {
+    s16 num_of_contours = consume_u16(buf, glyph_offset, 0);
+    s16 x_min           = consume_u16(buf, glyph_offset, 0);
+    s16 y_min           = consume_u16(buf, glyph_offset, 0);
+    s16 x_max           = consume_u16(buf, glyph_offset, 0);
+    s16 y_max           = consume_u16(buf, glyph_offset, 0);
+    
+    printf("contours: %hd\n", num_of_contours);
+    printf("y: %hd - %hd | x: %hd - %hd\n", y_min, y_max, x_min, x_max);
+
+    if (num_of_contours < 0) {
+        read_compound_glyph(buf, glyph_offset);
+        return;
+    }
+
+    read_simple_glyph(buf, glyph_offset);
+    return;
+}
+
+Vertex* lu_extract_glyph_from_font(Arena *arena, String font, u16 code_point, size_t *size) {
+    u8 *buf = lu_read_font(arena, font);
+
+    u64 read_offset = offsetof(OffsetSubtable, num_tables);
+    u64 skip        = sizeof(OffsetSubtable) - read_offset - sizeof(u16);
+    u16 num_tables  = consume_u16(buf, &read_offset, skip);
+
+    TableDirectory tables[TABLE_SIZE] = {};
+    read_table_directory(buf, &read_offset, num_tables, tables);
+
+    u16 loca_index_format   = read_head_table(buf, tables[HEAD]);
+    u16 glyph_id = read_glyph_id_from_cmap_table(buf, tables[CMAP], code_point);
+
+    u64 glyph_offset        = tables[LOCA].offset + glyph_id * loca_index_format;
+    u32 glyph_id_offset     = consume_u32(buf, &glyph_offset, 0);
+
+    read_glyph_table(buf, &glyph_id_offset);
+    return NULL;
 }
 
 /* 

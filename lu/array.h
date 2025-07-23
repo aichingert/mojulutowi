@@ -7,19 +7,15 @@
 
 // TODO: think about api design and implementation
 
-#define lu_array_push(arena, array, obj) \
-    do { \
-        if ((array).used + 1 >= (array).size) { \
-            void *base = lu_arena_alloc(arena, sizeof(obj) * (array).size * 2); \
-            for (u64 i = 0; i < (arena).size; i++) { \
-                base[i] = (arena).base[i]; \
-            } \
-            (arena).base = base; \
-            (arena).size *= 2; \
-        } \
+#define _ArrayHeader_ struct { u64 len; u64 cap; }
 
-        (array).base[(array).used] = obj; \
-        (array).used += 1; \
-    } while(0) \
+#define ArrayHeaderCast(a)  ((ArrayHeader *)&a)
+#define ArrayItemSize(a)    (sizeof(*(a).v))
+
+#define lu_array_push(arena, a, value)                                                            \
+    (*((void **)&(a).v) = lu_array_grow((arena), ArrayHeaderCast(a), (a).v, ArrayItemSize(a), 1), \
+    (a).v[(a).count++] = (value))                                                                 \
+
+void* lu_array_grow(Arena *arena, ArrayHeader *header, void *array, u64 item_size, u64 count);
 
 #endif /* LU_ARRAY_H */

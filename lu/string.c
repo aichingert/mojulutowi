@@ -15,9 +15,7 @@ String lu_str_copy(Arena *arena, String str) {
 }
 
 s8 lu_str_cmp(String a, String b) {
-    u64 min_len = MIN(a.len, b.len);
-
-    for (u64 i = 0; i < min_len; i++) {
+    for (u64 i = 0; i < MIN(a.len, b.len); i++) {
         if (a.value[i] > b.value[i]) {
             return 1;
         } else if (a.value[i] < b.value[i]) {
