@@ -1,6 +1,7 @@
 #include "ttf.h"
 #include "arena.h"
 #include "mem.h"
+#include "array.h"
 
 // References: 
 // https://developer.apple.com/fonts/TrueType-Reference-Manual/RM06/Chap6.html
@@ -20,8 +21,8 @@
 #define X_SHORT_VECTOR                          0b00000010
 #define Y_SHORT_VECTOR                          0b00000100
 #define REPEAT_FLAG                             0b00001000
-#define X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR    0b00010000
-#define Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR    0b00100000
+#define X_IS_SAME                               0b00010000
+#define Y_IS_SAME                               0b00100000
 
 #define ru16(buf, off) ((u16)buf[off] << 8) | ((u16)buf[off + 1])
 #define ru32(buf, off) (((u32)ru16(buf, off)) << (u32)16) | ((u32)ru16(buf, off + 2))
@@ -120,7 +121,7 @@ void read_table_directory(
 }
 
 // TODO: figure out what to do with the data
-void read_head_table(u8 *buf, TableDirectory head) {
+u16 read_head_table(u8 *buf, TableDirectory head) {
     u64 read_offset = head.offset;
 
     u16 maj_version         = consume_u16(buf, &read_offset, 0);
@@ -252,12 +253,13 @@ u16 read_glyph_id_from_cmap_table(u8 *buf, TableDirectory cmap, u16 code_point) 
     return 0;
 }
 
-void read_simple_glyph(u8 *buf, u64 *glyph_offset, s16 num_of_contours) {
+ArrayVec2 read_simple_glyph(Arena *arena, u8 *buf, u64 *glyph_offset, s16 num_of_contours) {
     assert(num_of_contours > 0 && "Error: no contours for simple glyph");
 
     u16 contour_end_pts[num_of_contours] = {};
     for (u16 i = 0; i < num_of_contours; i++) {
         contour_end_pts[i] = consume_u16(buf, glyph_offset, 0);
+        printf("CONTOUR ENDS WITH POINTS: %hu\n", contour_end_pts[i]);
     }
 
     // NOTE: ignoring instructions might never use them
@@ -265,40 +267,65 @@ void read_simple_glyph(u8 *buf, u64 *glyph_offset, s16 num_of_contours) {
     *glyph_offset += instr_len;
 
     u16 points = contour_end_pts[num_of_contours - 1] + 1;
+    s16 value = 0;
 
     u8 flags[points] = {};
-    
-    // TODO: use dynamic arrays and insert the mid points of the bezier curves
-    Vertex *vertices = (Vertex*)malloc(sizeof(Vertex) * (points + 1) * 2);
-    vertices[0] = (Vertex){
-        .x = 0.0,
-        .y = 0.0,
+    ArrayVec2 vertices = {
+        .cap    = points * 3,
+        .v      = lu_arena_alloc(arena, sizeof(Vec2) * points * 2),
     };
 
-    // TODO: more size checks
-    u16 i = 0;
-    while (i < points) {
-        flags[i] = buf[glyf_off++];
-
-        if ((flags[i] & 1) == 1) {
-            printf("ON_CURVE \\ %d\n", i);
-        }
+    printf("%hu\n", points);
+    for (u16 i = 0; i < points; i++) {
+        flags[i] = buf[(*glyph_offset)++];
 
         if ((flags[i] & REPEAT_FLAG) == REPEAT_FLAG) {
-            u8 times = buf[glyf_off++];
+            u8 times = buf[(*glyph_offset)++];
+            assert(i + times < points && "Error: repeat flag is too large");
 
-            assert(i + times < points && "ERROR: flags repeat outside flags array");
-            for (u16 j = i + 1; j <= i + times; j++) {
-                flags[j] = flags[i];
-            }
-
+            for (u16 j = i + 1; j <= i + times; j++) flags[j] = flags[i];
             i += times;
         }
-
-        i += 1;
     }
-    printf("flags done \n");
-    s16 value = 0;
+
+    u8 pair = X_SHORT_VECTOR | X_IS_SAME;
+
+    for (u16 i = 0; i < points; i++) {
+        Vec2 vector = {0};
+
+        if          ((flags[i] & pair) == pair) {
+            vector.x = buf[(*glyph_offset)++];
+        } else if   ((flags[i] & X_SHORT_VECTOR) == X_SHORT_VECTOR) {
+            vector.x = -((s16)buf[(*glyph_offset)++]);
+        } else if   ((flags[i] & X_IS_SAME) == X_IS_SAME) {
+            vector.x = i == 0 ? 0.0 : vertices.v[i - 1].x;
+        } else {
+            vector.x = consume_u16(buf, glyph_offset, 0);
+        }
+
+        printf("%hhu ", flags[i] & ON_CURVE);
+        lu_array_push(arena, vertices, vector);
+    }
+    printf("\n");
+
+    for (u16 i = 0; i < points; i++) {
+        printf("%f\n", vertices.v[i].x);
+    }
+
+    /*
+    for (u16 i = 0; i < points; i++) {
+        if          ((flags[i] & pair) == pair) {
+            vertices[i]
+            lu_array_push(arena, vertices, (Vec2){ .x = buf[(*glyph_offset)++] });
+        } else if   ((flags[i] & X_SHORT_VECTOR) == X_SHORT_VECTOR) {
+            lu_array_push(arena, vertices, (Vec2){ .x = -((s16)buf[(*glyph_offset)++]) });
+        } else if   ((flags[i] & X_IS_SAME) == X_IS_SAME) {
+            lu_array_push(arena, vertices, (Vec2){ .x = i == 0 ? 0.0 : vertices[i - 1].x });
+        } else {
+            lu_array_push(arena, vertices, (Vec2){ .x = consume_u16(buf, glyph_offset, 0) });
+        }
+    }
+
 
     for (u16 i = 0; i < points; i++) {
         switch (flags[i] & (X_SHORT_VECTOR | X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR)) {
@@ -359,32 +386,34 @@ void read_simple_glyph(u8 *buf, u64 *glyph_offset, s16 num_of_contours) {
     
     // TODO: prepare actual vertex array using approximations for the bezier lines
     printf("%hu\n", end_pts_of_contours[num_of_contours - 1]);
+    */
+    return vertices;
 }
 
 void read_compound_glyph(u8 *buf, u64 *glyph_offset) {
 
 }
 
-void read_glyph_table(u8 *buf, u64 *glyph_offset) {
+ArrayVec2 read_glyph_table(Arena *arena, u8 *buf, u64 *glyph_offset) {
     s16 num_of_contours = consume_u16(buf, glyph_offset, 0);
     s16 x_min           = consume_u16(buf, glyph_offset, 0);
     s16 y_min           = consume_u16(buf, glyph_offset, 0);
     s16 x_max           = consume_u16(buf, glyph_offset, 0);
     s16 y_max           = consume_u16(buf, glyph_offset, 0);
     
+    printf("-- Glyf Table --\n");
     printf("contours: %hd\n", num_of_contours);
     printf("y: %hd - %hd | x: %hd - %hd\n", y_min, y_max, x_min, x_max);
 
     if (num_of_contours < 0) {
         read_compound_glyph(buf, glyph_offset);
-        return;
+        return (ArrayVec2){0};
     }
 
-    read_simple_glyph(buf, glyph_offset);
-    return;
+    return read_simple_glyph(arena, buf, glyph_offset, num_of_contours);
 }
 
-Vertex* lu_extract_glyph_from_font(Arena *arena, String font, u16 code_point, size_t *size) {
+ArrayVec2 lu_extract_glyph_from_font(Arena *arena, String font, u16 code_point, size_t *size) {
     u8 *buf = lu_read_font(arena, font);
 
     u64 read_offset = offsetof(OffsetSubtable, num_tables);
@@ -396,12 +425,14 @@ Vertex* lu_extract_glyph_from_font(Arena *arena, String font, u16 code_point, si
 
     u16 loca_index_format   = read_head_table(buf, tables[HEAD]);
     u16 glyph_id = read_glyph_id_from_cmap_table(buf, tables[CMAP], code_point);
+    printf("GLYPH_ID: %hu\n", glyph_id);
 
     u64 glyph_offset        = tables[LOCA].offset + glyph_id * loca_index_format;
-    u32 glyph_id_offset     = consume_u32(buf, &glyph_offset, 0);
+    u64 glyph_id_offset     = consume_u32(buf, &glyph_offset, 0) + tables[GLYF].offset;
 
-    read_glyph_table(buf, &glyph_id_offset);
-    return NULL;
+    printf("%lu\n", glyph_id_offset);
+
+    return read_glyph_table(arena, buf, &glyph_id_offset);
 }
 
 /* 

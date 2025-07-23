@@ -3,6 +3,7 @@
 #include "window.h"
 #include "arena.h"
 #include "string.h"
+#include "array.h"
 
 int main(void) {
     Arena *app = lu_arena_init(64'000);
@@ -10,7 +11,7 @@ int main(void) {
     Window *win = lu_create_window(app, S("bed"), 640, 480);
 
     size_t len = 0;
-    String font = S("/home/booz/ext/nerd-fonts/src/unpatched-fonts/Iosevka/Iosevka-Medium.ttf");
+    String font = S("/home/pha/ext/nerd-fonts/src/unpatched-fonts/Iosevka/Iosevka-Medium.ttf");
     // /home/booz/ext/nerd-fonts/src/unpatched-fonts/Arimo/Regular/Arimo-Regular.ttf
     //const char *font = "/home/booz/ext/nerd-fonts/src/unpatched-fonts/Arimo/Regular/Arimo-Regular.ttf";
     // TODO: jetbrains mono
@@ -30,11 +31,13 @@ int main(void) {
             t = 0;
             c = (c + 1) % 26;
         }
-        Vertex *vertices = lu_extract_glyph_from_font(frame, font, 'A' + c, &len);
+        ArrayVec2 vertices = lu_extract_glyph_from_font(frame, font, 'A', &len);
 
+        /*
         lu_create_vertex_buffer(win, vertices, len);
         lu_draw_frame(win, len);
         lu_destroy_vertex_buffer(win);
+        */
         lu_poll_events(win);
 
         lu_arena_free(frame);
