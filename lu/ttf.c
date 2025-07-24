@@ -220,19 +220,15 @@ u16 read_glyph_id_from_cmap_table(u8 *buf, TableDirectory cmap, u16 code_point) 
                 assert(false && "ERROR: malformed font");
             }
 
-            printf("%hu - %hu\n", end_codes[i], start_codes[i]);
+            u64 code_point_delta = 2 * (code_point - start_codes[i]);
+            u64 glyph_array_index = id_range_offsets[i] + code_point_delta + id_range_offset_pos + i * 2;
+            u16 glyph_array_value = consume_u16(buf, &glyph_array_index, 0);
 
-            u16 delta = (code_point - start_codes[i]) * 2;
-
-            id_range_offset_pos += i * 2;
-            u16 pos = id_range_offset_pos + delta + id_range_offsets[i];
-
-            if (buf[pos] == 0) {
-                printf("MISSING GLYPH\n");
+            if (glyph_array_value == 0) {
                 return 0;
             }
 
-            return buf[pos] + id_deltas[i];
+            return glyph_array_value + id_deltas[i];
         }
     }
 
