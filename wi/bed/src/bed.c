@@ -30,7 +30,7 @@ int main(void) {
             c = (c + 1) % 26;
         }
 
-        ArrayVec2 vertices = lu_extract_glyph_from_font(frame, font, 'A' + c);
+        ArrayVec2 vertices = lu_extract_glyph_from_font(frame, font, 'B');
 
         lu_create_vertex_buffer(win, vertices);
         lu_draw_frame(win, vertices.len);

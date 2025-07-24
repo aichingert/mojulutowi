@@ -3,6 +3,9 @@
 
 #include "lu.h"
 
+#define MIN(a, b) ((a) > (b) ? (b) : (a))
+#define MAX(a, b) ((a) < (b) ? (b) : (a))
+
 typedef struct Vec2 {
     f32 x;
     f32 y;

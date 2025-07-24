@@ -40,21 +40,6 @@ CONSUME_FUNC(u16)
 CONSUME_FUNC(u32)
 CONSUME_FUNC(u64)
 
-typedef struct OffsetSubtable {
-    u32 scaler_type;
-    u16 num_tables;
-    u16 search_range;
-    u16 entry_selector;
-    u16 range_shift;
-} OffsetSubtable;
-
-typedef struct TableDirectory {
-    u32 tag;
-    u32 checksum;
-    u32 offset;
-    u32 length;
-} TableDirectory;
-
 // TODO: might want to use a macro for this when I know how
 #define TABLE_SIZE 4
 typedef enum TableDefinitions {
@@ -263,7 +248,7 @@ void read_simple_coordinates(
         u8  vec_flag, 
         u8  same_flag) 
 {
-    u8 pair = vec_flag | same_flag;
+    u8  pair = vec_flag | same_flag;
 
     for (u16 i = 0; i < points; i++) {
         s16 v = 0;
@@ -276,19 +261,105 @@ void read_simple_coordinates(
             v = consume_u16(buf, glyph_offset, 0);
         }
 
+        v += i > 0 ? coordinates[i - 1] : 0;
         coordinates[i] = v;
     }
+}
+
+void outline_simple_glyph_contour(
+        Arena *arena, 
+        u8 *flags,
+        u16 index,
+        u16 contour_end_point,
+        s16 *x_coordinates,
+        s16 *y_coordinates,
+        ArrayVec2 *vertices)
+{
+    // TODO: check that some elements got pushed
+    u64 start = vertices->len != 0 ? vertices->len: 0;
+
+    Vec2 previous_point  = index == 0 
+        ? (Vec2){0} 
+        : (Vec2){ .x = x_coordinates[index], .y = y_coordinates[index] };
+    bool previous_on_curve = false;
+
+    for (u16 i = index; i <= contour_end_point; i++) {
+        Vec2 current = { .x = (f32)x_coordinates[i], .y = (f32)y_coordinates[i] };
+
+        bool on_curve = (flags[i] & ON_CURVE) == ON_CURVE;
+
+        if (i == index) {
+            previous_point = current;
+            previous_on_curve = on_curve;
+            continue;
+        }
+
+
+        if (previous_on_curve && on_curve) {
+            lu_array_push(arena, *vertices, previous_point);
+            lu_array_push(arena, *vertices, current);
+            previous_point = current;
+        } else if (previous_on_curve) {
+            for (u16 j = i + 1;; j++) {
+                assert(j <= contour_end_point && "ERROR: got no fixed points");
+
+                bool next_on_curve = (flags[j] & ON_CURVE) == ON_CURVE;
+                Vec2 next = { .x = x_coordinates[j], .y = y_coordinates[j] };
+
+                Vec2 p_0 = previous_point;
+                Vec2 c_0 = current;
+                Vec2 p_1 = {0};
+
+                if (next_on_curve) {
+                    p_1 = next;
+                } else {
+                    p_1 = lerp_v2(current, next, 0.5);
+                }
+
+                lu_array_push(arena, *vertices, p_0);
+
+                // Approximation for bezier
+                // p(t) = (1-t)^2p0 + 2t(1-t)p1 + t^2p2
+                for (f32 t = 0.25f; t < 1.0f; t += 0.25f) {
+                    Vec2 p_t = {
+                        .x = (1.0f - t) * (1.0f - t) * p_0.x + 2.0f * t * (1.0f - t) * c_0.x + t * t * p_1.x,
+                        .y = (1.0f - t) * (1.0f - t) * p_0.y + 2.0f * t * (1.0f - t) * c_0.y + t * t * p_1.y,
+                    };
+
+                    lu_array_push(arena, *vertices, p_t);
+                    lu_array_push(arena, *vertices, p_t);
+                }
+
+                lu_array_push(arena, *vertices, p_1);
+
+                if (next_on_curve || j == contour_end_point) {
+                    i = j;
+                    previous_point = next;
+                    previous_on_curve = next_on_curve;
+                    break;
+                }
+
+                previous_point = current;
+                current = next;
+            }
+        } else {
+            previous_point = lerp_v2(previous_point, current, 0.5);
+            previous_on_curve = true;
+        } 
+    }
+
+    lu_array_push(arena, *vertices, previous_point);
+    lu_array_push(arena, *vertices, vertices->v[start]);
 }
 
 ArrayVec2 read_simple_glyph(Arena *arena, u8 *buf, u64 *glyph_offset, s16 num_of_contours) {
     assert(num_of_contours > 0 && "Error: no contours for simple glyph");
 
     u16 contour_end_pts[num_of_contours] = {};
-    u16 current_end_point = 0;
 
     for (u16 i = 0; i < num_of_contours; i++) {
         contour_end_pts[i] = consume_u16(buf, glyph_offset, 0);
-        printf("CONTOUR ENDS WITH POINTS: %hu\n", contour_end_pts[i]);
+        printf("CONTOUR ENDS WITH POINT: %hu\n", contour_end_pts[i]);
     }
 
     // NOTE: ignoring instructions might never use them
@@ -300,7 +371,7 @@ ArrayVec2 read_simple_glyph(Arena *arena, u8 *buf, u64 *glyph_offset, s16 num_of
     s16         x_coordinates[points] = {};
     s16         y_coordinates[points] = {};
     ArrayVec2   vertices = {
-        .cap    = points * 3,
+        .cap    = points * 4,
         .v      = lu_arena_alloc(arena, sizeof(Vec2) * points * 2),
     };
     
@@ -317,41 +388,28 @@ ArrayVec2 read_simple_glyph(Arena *arena, u8 *buf, u64 *glyph_offset, s16 num_of
     }
 
     read_simple_coordinates(buf, glyph_offset, x_coordinates, flags, points, X_SHORT_VECTOR, X_IS_SAME);
-    read_simple_coordinates(buf, glyph_offset, y_coordinates, flags, points, Y_SHORT_VECTOR, Y_IS_SAME);
- 
-    Vec2 p = {0};
+    read_simple_coordinates(buf, glyph_offset, y_coordinates, flags, points, Y_SHORT_VECTOR, Y_IS_SAME); 
 
     for (u16 i = 0; i < points; i++) {
-        Vec2 next_p = {
-            .x = p.x + (f32)x_coordinates[i],
-            .y = p.y + (f32)y_coordinates[i],
-        };
+        printf("%hd ; %hd\n", x_coordinates[i], y_coordinates[i]);
+    }
 
-        if (i > 0 && (flags[i] & ON_CURVE) == 0 && (flags[i - 1] & ON_CURVE) == 0) {
-            Vec2 mid = lerp_v2(p, next_p, 0.5);
-            lu_array_push(arena, vertices, mid);
-        }
-
-        p = next_p;
-        lu_array_push(arena, vertices, p);
-
-        // TODO: almost there here is a bug :/
-        u64 last_first = current_end_point == 0 ? 0 : contour_end_pts[current_end_point];
-
-        if (i > last_first && current_end_point < num_of_contours && i != contour_end_pts[current_end_point]) {
-            u64 pos = vertices.len - 1;
-            lu_array_push(arena, vertices, vertices.v[pos]);
-        } else if (i > last_first) {
-            lu_array_push(arena, vertices, vertices.v[last_first]);
-            lu_array_push(arena, vertices, p);
-            current_end_point += 1;
-        }
+    for (s16 i = 0;  i < num_of_contours; i++) {
+        u64 index = i == 0 ? 0 : contour_end_pts[i - 1] + 1;
+        outline_simple_glyph_contour(
+                arena, 
+                flags, 
+                index, 
+                contour_end_pts[i], 
+                x_coordinates, 
+                y_coordinates, 
+                &vertices);
     }
 
     for (u64 i = 0; i < vertices.len; i++) {
         vertices.v[i].x /= 1000.0f;
         vertices.v[i].y /= 1000.0f;
-        printf("%f - %f\n", vertices.v[i].x, vertices.v[i].y);
+        printf("%f ; %f\n", vertices.v[i].x, vertices.v[i].y);
     }
     printf("%hu - %lu\n", points, vertices.len);
 

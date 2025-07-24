@@ -11,7 +11,5 @@ void* lu_array_grow(Arena *arena, ArrayHeader *header, void *array, u64 item_siz
     void *new = lu_arena_alloc(arena, header->cap * item_size);
 
     lu_memcpy(new, array, header->len * item_size);
-    header->len += count;
-
     return new;
 }

@@ -921,7 +921,7 @@ void lu_record_command_buffer(
     };
     vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
-    vkCmdDraw(command_buffer, 18, 1, 0, 0);
+    vkCmdDraw(command_buffer, vertices, 1, 0, 0);
 
     vkCmdEndRenderingKHR(command_buffer);
 
