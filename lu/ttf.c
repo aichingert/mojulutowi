@@ -130,14 +130,16 @@ u16 read_head_table(u8 *buf, TableDirectory head) {
     s16 index_to_loc_format = consume_u16(buf, &read_offset, 0);
     s16 glyph_data_format   = consume_u16(buf, &read_offset, 0);
 
-    printf("Font version: %hu.%hu\n", maj_version, min_version);
-    printf("created: %lu - modified %lu\n", created, modified);
-    printf("global bounds: \n");
-    printf("    x: min(\t%hd)\tmax(\t%hd)\n", global_x_min, global_x_max);
-    printf("    y: min(\t%hd)\tmax(\t%hd)\n", global_y_min, global_y_max);
-
+    (void)maj_version;
+    (void)min_version;
     (void)font_revision;
     (void)checksum;
+    (void)global_x_min;
+    (void)global_y_min;
+    (void)global_y_max;
+    (void)global_x_max;
+    (void)modified;
+    (void)created;
     (void)lowest_rec_ppem;
     (void)mac_style;
     (void)uints_per_em;
@@ -150,10 +152,9 @@ u16 read_head_table(u8 *buf, TableDirectory head) {
 
 u16 read_glyph_id_from_cmap_table(u8 *buf, TableDirectory cmap, u16 code_point) {
     u64 read_offset = cmap.offset;
-    u16 version     = consume_u16(buf, &read_offset, 0);
+    u16 version     = consume_u16(buf, &read_offset, 0); (void)version;
     u16 subtables   = consume_u16(buf, &read_offset, 0);
 
-    printf("CMAP-Version: %hu - num_subtables: %hu\n", version, subtables);
     u64 format_4_offset = 0;
 
     for (u16 i = 0; i < subtables; i++) {
@@ -219,15 +220,15 @@ u16 read_glyph_id_from_cmap_table(u8 *buf, TableDirectory cmap, u16 code_point) 
                 assert(false && "ERROR: malformed font");
             }
 
+            printf("%hu - %hu\n", end_codes[i], start_codes[i]);
+
             u16 delta = (code_point - start_codes[i]) * 2;
 
             id_range_offset_pos += i * 2;
             u16 pos = id_range_offset_pos + delta + id_range_offsets[i];
 
             if (buf[pos] == 0) {
-                for (u8 j = 0; j < 200; j++) {
-                    printf("MISSING GLYPH\n");
-                }
+                printf("MISSING GLYPH\n");
                 return 0;
             }
 
@@ -285,7 +286,6 @@ void outline_simple_glyph_contour(
 
     for (u16 i = index; i <= contour_end_point; i++) {
         Vec2 current = { .x = (f32)x_coordinates[i], .y = (f32)y_coordinates[i] };
-
         bool on_curve = (flags[i] & ON_CURVE) == ON_CURVE;
 
         if (i == index) {
@@ -294,14 +294,15 @@ void outline_simple_glyph_contour(
             continue;
         }
 
-
         if (previous_on_curve && on_curve) {
             lu_array_push(arena, *vertices, previous_point);
             lu_array_push(arena, *vertices, current);
             previous_point = current;
         } else if (previous_on_curve) {
             for (u16 j = i + 1;; j++) {
-                assert(j <= contour_end_point && "ERROR: got no fixed points");
+                if ( j > contour_end_point) {
+                    j = index;
+                }
 
                 bool next_on_curve = (flags[j] & ON_CURVE) == ON_CURVE;
                 Vec2 next = { .x = x_coordinates[j], .y = y_coordinates[j] };
@@ -320,7 +321,7 @@ void outline_simple_glyph_contour(
 
                 // Approximation for bezier
                 // p(t) = (1-t)^2p0 + 2t(1-t)p1 + t^2p2
-                for (f32 t = 0.25f; t < 1.0f; t += 0.25f) {
+                for (f32 t = 0.001f; t < 1.0f; t += 0.001f) {
                     Vec2 p_t = {
                         .x = (1.0f - t) * (1.0f - t) * p_0.x + 2.0f * t * (1.0f - t) * c_0.x + t * t * p_1.x,
                         .y = (1.0f - t) * (1.0f - t) * p_0.y + 2.0f * t * (1.0f - t) * c_0.y + t * t * p_1.y,
@@ -332,7 +333,9 @@ void outline_simple_glyph_contour(
 
                 lu_array_push(arena, *vertices, p_1);
 
-                if (next_on_curve || j == contour_end_point) {
+                if (j == index) {
+                    return;
+                } else if (next_on_curve) {
                     i = j;
                     previous_point = next;
                     previous_on_curve = next_on_curve;
@@ -359,7 +362,6 @@ ArrayVec2 read_simple_glyph(Arena *arena, u8 *buf, u64 *glyph_offset, s16 num_of
 
     for (u16 i = 0; i < num_of_contours; i++) {
         contour_end_pts[i] = consume_u16(buf, glyph_offset, 0);
-        printf("CONTOUR ENDS WITH POINT: %hu\n", contour_end_pts[i]);
     }
 
     // NOTE: ignoring instructions might never use them
@@ -390,10 +392,6 @@ ArrayVec2 read_simple_glyph(Arena *arena, u8 *buf, u64 *glyph_offset, s16 num_of
     read_simple_coordinates(buf, glyph_offset, x_coordinates, flags, points, X_SHORT_VECTOR, X_IS_SAME);
     read_simple_coordinates(buf, glyph_offset, y_coordinates, flags, points, Y_SHORT_VECTOR, Y_IS_SAME); 
 
-    for (u16 i = 0; i < points; i++) {
-        printf("%hd ; %hd\n", x_coordinates[i], y_coordinates[i]);
-    }
-
     for (s16 i = 0;  i < num_of_contours; i++) {
         u64 index = i == 0 ? 0 : contour_end_pts[i - 1] + 1;
         outline_simple_glyph_contour(
@@ -408,10 +406,8 @@ ArrayVec2 read_simple_glyph(Arena *arena, u8 *buf, u64 *glyph_offset, s16 num_of
 
     for (u64 i = 0; i < vertices.len; i++) {
         vertices.v[i].x /= 1000.0f;
-        vertices.v[i].y /= 1000.0f;
-        printf("%f ; %f\n", vertices.v[i].x, vertices.v[i].y);
+        vertices.v[i].y /= -1000.0f;
     }
-    printf("%hu - %lu\n", points, vertices.len);
 
     return vertices;
 }
@@ -427,11 +423,9 @@ ArrayVec2 read_glyph_table(Arena *arena, u8 *buf, u64 *glyph_offset) {
     s16 y_min           = consume_u16(buf, glyph_offset, 0);
     s16 x_max           = consume_u16(buf, glyph_offset, 0);
     s16 y_max           = consume_u16(buf, glyph_offset, 0);
-    
-    printf("-- Glyf Table --\n");
-    printf("contours: %hd\n", num_of_contours);
-    printf("y: %hd - %hd | x: %hd - %hd\n", y_min, y_max, x_min, x_max);
 
+    (void)x_min; (void)y_min; (void)x_max; (void)y_max;
+    
     if (num_of_contours < 0) {
         read_compound_glyph(buf, glyph_offset);
         return (ArrayVec2){0};
@@ -452,12 +446,9 @@ ArrayVec2 lu_extract_glyph_from_font(Arena *arena, String font, u16 code_point) 
 
     u16 loca_index_format   = read_head_table(buf, tables[HEAD]);
     u16 glyph_id = read_glyph_id_from_cmap_table(buf, tables[CMAP], code_point);
-    printf("GLYPH_ID: %hu\n", glyph_id);
 
     u64 glyph_offset        = tables[LOCA].offset + glyph_id * loca_index_format;
     u64 glyph_id_offset     = consume_u32(buf, &glyph_offset, 0) + tables[GLYF].offset;
-
-    printf("%lu\n", glyph_id_offset);
 
     return read_glyph_table(arena, buf, &glyph_id_offset);
 }

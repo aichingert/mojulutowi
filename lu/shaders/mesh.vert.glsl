@@ -7,6 +7,9 @@ vec2 positions[3] = vec2[](
 );
 
 void main() {
-    gl_Position = vec4(positions[gl_VertexIndex], 0.0, 1.0);
+    gl_Position.x = positions[gl_VertexIndex].x;
+    gl_Position.y = positions[gl_VertexIndex].y;
+    gl_Position.z = 0.0;
+    gl_Position.w = 1.0;
 }
 

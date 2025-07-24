@@ -5,9 +5,6 @@
 
 #define COUNT(arr) sizeof(arr) / sizeof(arr[0])
 
-#define MIN(a, b) ((a) > (b) ? (b) : (a))
-#define MAX(a, b) ((a) < (b) ? (b) : (a))
-
 typedef uint64_t    u64;
 typedef uint32_t    u32;
 typedef uint16_t    u16;
