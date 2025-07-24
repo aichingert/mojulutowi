@@ -400,7 +400,7 @@ void lu_create_device(Window *win, u32 *queue_family) {
     VK_CHECK(vkCreateDevice(physical, &create_info, NULL, &win->renderer.device));
 }
 
-void lu_create_swapchain(Window *win) {
+void lu_create_swapchain(Arena *arena, Window *win) {
     VkRenderer vk = win->renderer;
     u32 present_mode_count = 0, format_count = 0;
 
@@ -447,7 +447,8 @@ void lu_create_swapchain(Window *win) {
     VK_CHECK(vkCreateSwapchainKHR(vk.device, &create_info, NULL, &swapchain));
 
     vkGetSwapchainImagesKHR(vk.device, swapchain, &image_count, NULL);
-    VkImage *images = (VkImage*)malloc(sizeof(VkImage) * image_count);
+
+    VkImage *images = (VkImage*)lu_arena_alloc(arena, sizeof(VkImage) * image_count);
     vkGetSwapchainImagesKHR(vk.device, swapchain, &image_count, images);
 
     win->renderer.format = formats[0].format;
@@ -456,9 +457,9 @@ void lu_create_swapchain(Window *win) {
     win->renderer.swapchain = swapchain;
 }
 
-void lu_create_image_views(Window *win) {
+void lu_create_image_views(Arena *arena, Window *win) {
     VkRenderer vk = win->renderer;
-    VkImageView *image_views = (VkImageView*)malloc(sizeof(VkImageView) * vk.image_count);
+    VkImageView *image_views = (VkImageView*)lu_arena_alloc(arena, sizeof(VkImageView) * vk.image_count);
 
     for (u32 i = 0; i < vk.image_count; i ++) {
         VkImageViewCreateInfo create_info = {
@@ -496,20 +497,23 @@ void lu_destroy_swapchain(Window *win) {
         vkDestroyImageView(vk->device, vk->image_views[i], NULL);
     }
 
-    free(vk->images);
-    free(vk->image_views);
+    //free(vk->images);
+    //free(vk->image_views);
     vkDestroySwapchainKHR(vk->device, vk->swapchain, NULL);
 }
 
 // TODO: might have to recreate render pass as well
-void lu_recreate_swapchain(Window *win) {
+// TODO: maybe using frame arena because this could 
+// take some space
+void lu_recreate_swapchain(Arena *arena, Window *win) {
     lu_destroy_swapchain(win);
 
-    lu_create_swapchain(win);
-    lu_create_image_views(win);
+    lu_create_swapchain(arena, win);
+    lu_create_image_views(arena, win);
 }
 
-VkShaderModule lu_create_shader_module(VkDevice device, const char *shader) {
+// TODO: use scratch arenas
+VkShaderModule lu_create_shader_module(Arena *arena, VkDevice device, const char *shader) {
     // TODO: error handling
     FILE *file = fopen(shader, "r");
     if (!file) {
@@ -521,7 +525,7 @@ VkShaderModule lu_create_shader_module(VkDevice device, const char *shader) {
     fseek(file, 0, SEEK_SET);
 
     size_t size = file_size / sizeof(u8);
-    u32 *buf = (u32*)malloc(file_size);
+    u32 *buf = (u32*)lu_arena_alloc(arena, file_size);
     fread(buf, sizeof(u32), size, file);
     fclose(file);
 
@@ -533,7 +537,6 @@ VkShaderModule lu_create_shader_module(VkDevice device, const char *shader) {
 
     VkShaderModule shader_module = {0};
     VK_CHECK(vkCreateShaderModule(device, &create_info, NULL, &shader_module));
-    free(buf);
     return shader_module;
 }
 
@@ -558,11 +561,11 @@ VkVertexInputAttributeDescription vertex_attribute_description() {
     return description;
 }
 
-void lu_create_graphics_pipeline(Window *win) {
+void lu_create_graphics_pipeline(Arena *arena, Window *win) {
     VkRenderer vk = win->renderer;
 
-    VkShaderModule vert = lu_create_shader_module(vk.device, "lu/spirv/text.vert.spv");
-    VkShaderModule frag = lu_create_shader_module(vk.device, "lu/spirv/text.frag.spv");
+    VkShaderModule vert = lu_create_shader_module(arena, vk.device, "lu/spirv/text.vert.spv");
+    VkShaderModule frag = lu_create_shader_module(arena, vk.device, "lu/spirv/text.frag.spv");
 
     VkPipelineShaderStageCreateInfo shader_stages[] = {
         {
@@ -809,7 +812,7 @@ void lu_destroy_vertex_buffer(Window *win) {
     vkFreeMemory(win->renderer.device, win->renderer.vertex_buffer_memory, NULL);
 }
 
-void lu_setup_renderer(Window *win, String name) {
+void lu_setup_renderer(Arena *arena, Window *win, String name) {
     load_instance_proc_addr();
     VkInstance instance = lu_create_instance(name);
     instance_load_vulkan(instance);
@@ -827,9 +830,9 @@ void lu_setup_renderer(Window *win, String name) {
 
     vkGetDeviceQueue(win->renderer.device, queue_family, 0, &win->renderer.graphics_queue);
 
-    lu_create_swapchain(win);
-    lu_create_image_views(win);
-    lu_create_graphics_pipeline(win);
+    lu_create_swapchain(arena, win);
+    lu_create_image_views(arena, win);
+    lu_create_graphics_pipeline(arena, win);
     lu_create_command_structures(win);
     lu_create_sync_objs(win);
 }

@@ -25,8 +25,6 @@ int main(void) {
     }
 
     while (!lu_window_should_close(win)) {
-        Arena *frame = lu_arena_init(16'000'000);
-
         if (t > 1000) {
             t = 0;
             c = (c + 1) % 26;
@@ -36,8 +34,6 @@ int main(void) {
         lu_draw_frame(win, alphabet[c].len);
         lu_destroy_vertex_buffer(win);
         lu_poll_events(win);
-
-        lu_arena_free(frame);
 
         t += 1;
     }

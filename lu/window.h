@@ -65,6 +65,11 @@ typedef struct Window {
     VkRenderer renderer;
 } Window;
 
+typedef struct CallbackData {
+    Window *win;
+    Arena *arena;
+} CallbackData;
+
 enum WindowFlags {
     WINDOW_CLOSE_BIT = 1 << (0),
 };
