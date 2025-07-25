@@ -6,13 +6,13 @@
 #include "array.h"
 
 int main(void) {
-    Arena *app = lu_arena_init(32'000'000);
+    Arena *app = lu_arena_init(512'000'000);
 
     Window *win = lu_create_window(app, S("bed"), 640, 480);
 
-    //String font = S("/home/booz/ext/nerd-fonts/src/unpatched-fonts/Iosevka/Iosevka-Medium.ttf");
+    String font = S("/home/booz/ext/nerd-fonts/src/unpatched-fonts/Iosevka/Iosevka-Medium.ttf");
     //String font = S("/home/booz/ext/nerd-fonts/src/unpatched-fonts/Arimo/Regular/Arimo-Regular.ttf");
-    String font = S("/home/booz/ext/nerd-fonts/src/unpatched-fonts/JetBrainsMono/Ligatures/Regular/JetBrainsMono-Regular.ttf");
+    //String font = S("/home/booz/ext/nerd-fonts/src/unpatched-fonts/JetBrainsMono/Ligatures/Regular/JetBrainsMono-Regular.ttf");
     //String font = S("/home/booz/ext/nerd-fonts/src/unpatched-fonts/UbuntuMono/Regular/UbuntuMono-R.ttf");
 
     u8  c = 0;
@@ -21,12 +21,11 @@ int main(void) {
     ArrayVec2 alphabet[26];
 
     for (u16 i = 0; i < 26; i++) {
-        printf("PARSING: %c\n", 'a' + i);
         alphabet[i] = lu_extract_glyph_from_font(app, font, 'a' + i);
     }
 
     while (!lu_window_should_close(win)) {
-        if (t > 10000) {
+        if (t > 1000) {
             t = 0;
             c = (c + 1) % 26;
         }

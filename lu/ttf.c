@@ -25,17 +25,16 @@
 #define X_IS_SAME                               0b00010000
 #define Y_IS_SAME                               0b00100000
 
-#define ARG_1_AND_2_ARE_WORDS                   0b00000000001
-#define ARGS_ARE_XY_VALUES                      0b00000000010
-#define ROUND_XY_TO_GRID                        0b00000000100
-#define WE_HAVE_A_SCALE                         0b00000001000
-#define OBSOLETE                                0b00000010000
-#define MORE_COMPONENTS                         0b00000100000
-#define WE_HAVE_AN_X_AND_Y_SCALE                0b00001000000
-#define WE_HAVE_A_TWO_BY_TWO                    0b00010000000
-#define WE_HAVE_INSTRUCTIONS                    0b00100000000
-#define USE_MY_METRICS                          0b01000000000
-#define OVERLAP_COMPOUND                        0b10000000000
+#define ARG_1_AND_2_ARE_WORDS                   0x0001
+#define ARGS_ARE_XY_VALUES                      0x0002
+#define ROUND_XY_TO_GRID                        0x0004
+#define WE_HAVE_A_SCALE                         0x0008
+#define MORE_COMPONENTS                         0x0020
+#define WE_HAVE_AN_X_AND_Y_SCALE                0x0040
+#define WE_HAVE_A_TWO_BY_TWO                    0x0080
+#define WE_HAVE_INSTRUCTIONS                    0x0100 
+#define USE_MY_METRICS                          0x0200
+#define OVERLAP_COMPOUND                        0x0400
 
 #define ru16(buf, off) ((u16)buf[off] << 8) | ((u16)buf[off + 1])
 #define ru32(buf, off) (((u32)ru16(buf, off)) << (u32)16) | ((u32)ru16(buf, off + 2))
@@ -412,11 +411,6 @@ ArrayVec2 read_simple_glyph(Arena *arena, u8 *buf, u64 *glyph_offset, s16 num_of
                 &vertices);
     }
 
-    for (u64 i = 0; i < vertices.len; i++) {
-        vertices.v[i].x /= 1000.0f;
-        vertices.v[i].y /= -1000.0f;
-    }
-
     return vertices;
 }
 
@@ -433,10 +427,10 @@ ArrayVec2 read_compound_glyph(
     do {
         flags           = consume_u16(buf, glyph_offset, 0);
         u16 glyph_id    = consume_u16(buf, glyph_offset, 0);
-        f32 a = 0.0f;
+        f32 a = 1.0f;
         f32 b = 0.0f;
         f32 c = 0.0f;
-        f32 d = 0.0f;
+        f32 d = 1.0f;
         f32 e = 0.0f;
         f32 f = 0.0f;
 
@@ -469,7 +463,12 @@ ArrayVec2 read_compound_glyph(
         ArrayVec2 component_data = read_glyph_table(arena, buf, &glyph_id_offset, tables, loca_index_format);
 
         for (u64 i = 0; i < component_data.len; i++) {
-            lu_array_push(arena, compound_data, component_data.v[i]);
+            f32 x = component_data.v[i].x;
+            f32 y = component_data.v[i].y;
+
+            Vec2 point = { .x = x * a + b * y + e, .y = x * c + d * y + f };
+
+            lu_array_push(arena, compound_data, point);
         }
     } while((flags & MORE_COMPONENTS) == MORE_COMPONENTS);
     
@@ -490,12 +489,15 @@ ArrayVec2 read_glyph_table(
     s16 y_max           = consume_u16(buf, glyph_offset, 0);
 
     (void)x_min; (void)y_min; (void)x_max; (void)y_max;
+    ArrayVec2 vertices = {0};
     
-    if (num_of_contours < 0) {
-        return read_compound_glyph(arena, buf, glyph_offset, tables, loca_index_format);
+    if (num_of_contours >= 0) {
+        vertices = read_simple_glyph(arena, buf, glyph_offset, num_of_contours);
+    } else {
+        vertices = read_compound_glyph(arena, buf, glyph_offset, tables, loca_index_format);
     }
 
-    return read_simple_glyph(arena, buf, glyph_offset, num_of_contours);
+    return vertices;
 }
 
 ArrayVec2 lu_extract_glyph_from_font(Arena *arena, String font, u16 code_point) {
@@ -514,6 +516,13 @@ ArrayVec2 lu_extract_glyph_from_font(Arena *arena, String font, u16 code_point) 
     u64 glyph_offset        = tables[LOCA].offset + glyph_id * loca_index_format;
     u64 glyph_id_offset     = consume_u32(buf, &glyph_offset, 0) + tables[GLYF].offset;
 
-    return read_glyph_table(arena, buf, &glyph_id_offset, tables, loca_index_format);
+    ArrayVec2 vertices = read_glyph_table(arena, buf, &glyph_id_offset, tables, loca_index_format);
+    
+    for (u64 i = 0; i < vertices.len; i++) {
+        vertices.v[i].x /= 1000.0f;
+        vertices.v[i].y /= -1000.0f;
+    }
+
+    return vertices;
 }
 
