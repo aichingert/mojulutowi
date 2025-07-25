@@ -25,6 +25,18 @@
 #define X_IS_SAME                               0b00010000
 #define Y_IS_SAME                               0b00100000
 
+#define ARG_1_AND_2_ARE_WORDS                   0b00000000001
+#define ARGS_ARE_XY_VALUES                      0b00000000010
+#define ROUND_XY_TO_GRID                        0b00000000100
+#define WE_HAVE_A_SCALE                         0b00000001000
+#define OBSOLETE                                0b00000010000
+#define MORE_COMPONENTS                         0b00000100000
+#define WE_HAVE_AN_X_AND_Y_SCALE                0b00001000000
+#define WE_HAVE_A_TWO_BY_TWO                    0b00010000000
+#define WE_HAVE_INSTRUCTIONS                    0b00100000000
+#define USE_MY_METRICS                          0b01000000000
+#define OVERLAP_COMPOUND                        0b10000000000
+
 #define ru16(buf, off) ((u16)buf[off] << 8) | ((u16)buf[off + 1])
 #define ru32(buf, off) (((u32)ru16(buf, off)) << (u32)16) | ((u32)ru16(buf, off + 2))
 #define ru64(buf, off) (((u64)ru32(buf, off)) << (u64)32) | ((u64)ru32(buf, off + 4))
@@ -310,7 +322,7 @@ void outline_simple_glyph_contour(
                 if (next_on_curve) {
                     p_1 = next;
                 } else {
-                    p_1 = lerp_v2(current, next, 0.5);
+                    p_1 = lu_lerp_v2(current, next, 0.5);
                 }
 
                 lu_array_push(arena, *vertices, p_0);
@@ -342,7 +354,7 @@ void outline_simple_glyph_contour(
                 current = next;
             }
         } else {
-            previous_point = lerp_v2(previous_point, current, 0.5);
+            previous_point = lu_lerp_v2(previous_point, current, 0.5);
             previous_on_curve = true;
         } 
     }
@@ -408,12 +420,69 @@ ArrayVec2 read_simple_glyph(Arena *arena, u8 *buf, u64 *glyph_offset, s16 num_of
     return vertices;
 }
 
-// TODO: implement
-void read_compound_glyph(u8 *buf, u64 *glyph_offset) {
-    assert(false && "TODO: implement compound glyphs");
+ArrayVec2 read_compound_glyph(
+        Arena *arena, 
+        u8 *buf, 
+        u64 *glyph_offset, 
+        TableDirectory *tables, 
+        u16 loca_index_format) 
+{
+    u16 flags = 0;
+    ArrayVec2 compound_data = {0};
+
+    do {
+        flags           = consume_u16(buf, glyph_offset, 0);
+        u16 glyph_id    = consume_u16(buf, glyph_offset, 0);
+        f32 a = 0.0f;
+        f32 b = 0.0f;
+        f32 c = 0.0f;
+        f32 d = 0.0f;
+        f32 e = 0.0f;
+        f32 f = 0.0f;
+
+        if ((flags & ARGS_ARE_XY_VALUES) & ARGS_ARE_XY_VALUES) {
+            if ((flags & ARG_1_AND_2_ARE_WORDS) == ARG_1_AND_2_ARE_WORDS) {
+                e = (s16)consume_u16(buf, glyph_offset, 0);
+                f = (s16)consume_u16(buf, glyph_offset, 0);
+            } else {
+                e = (s8)buf[(*glyph_offset)++];
+                f = (s8)buf[(*glyph_offset)++];
+            }
+        }
+
+        if        ((flags & WE_HAVE_A_TWO_BY_TWO) == WE_HAVE_A_TWO_BY_TWO) {
+            a = ((f32)((s16)consume_u16(buf, glyph_offset, 0))) / ((f32)(1 << 14));
+            b = ((f32)((s16)consume_u16(buf, glyph_offset, 0))) / ((f32)(1 << 14));
+            c = ((f32)((s16)consume_u16(buf, glyph_offset, 0))) / ((f32)(1 << 14));
+            d = ((f32)((s16)consume_u16(buf, glyph_offset, 0))) / ((f32)(1 << 14));
+        } else if ((flags & WE_HAVE_AN_X_AND_Y_SCALE) == WE_HAVE_AN_X_AND_Y_SCALE) {
+            a = ((f32)((s16)consume_u16(buf, glyph_offset, 0))) / ((f32)(1 << 14));
+            d = ((f32)((s16)consume_u16(buf, glyph_offset, 0))) / ((f32)(1 << 14));
+        } else if ((flags & WE_HAVE_A_SCALE) == WE_HAVE_A_SCALE) {
+            a = ((f32)((s16)consume_u16(buf, glyph_offset, 0))) / ((f32)(1 << 14));
+            d = a;
+        }
+
+        u64 compound_offset = tables[LOCA].offset + glyph_id * loca_index_format;
+        u64 glyph_id_offset = consume_u32(buf, &compound_offset, 0) + tables[GLYF].offset;
+
+        ArrayVec2 component_data = read_glyph_table(arena, buf, &glyph_id_offset, tables, loca_index_format);
+
+        for (u64 i = 0; i < component_data.len; i++) {
+            lu_array_push(arena, compound_data, component_data.v[i]);
+        }
+    } while((flags & MORE_COMPONENTS) == MORE_COMPONENTS);
+    
+    return compound_data;
 }
 
-ArrayVec2 read_glyph_table(Arena *arena, u8 *buf, u64 *glyph_offset) {
+ArrayVec2 read_glyph_table(
+        Arena *arena, 
+        u8 *buf, 
+        u64 *glyph_offset, 
+        TableDirectory *tables,
+        u16 loca_index_format) 
+{
     s16 num_of_contours = consume_u16(buf, glyph_offset, 0);
     s16 x_min           = consume_u16(buf, glyph_offset, 0);
     s16 y_min           = consume_u16(buf, glyph_offset, 0);
@@ -423,8 +492,7 @@ ArrayVec2 read_glyph_table(Arena *arena, u8 *buf, u64 *glyph_offset) {
     (void)x_min; (void)y_min; (void)x_max; (void)y_max;
     
     if (num_of_contours < 0) {
-        read_compound_glyph(buf, glyph_offset);
-        return (ArrayVec2){0};
+        return read_compound_glyph(arena, buf, glyph_offset, tables, loca_index_format);
     }
 
     return read_simple_glyph(arena, buf, glyph_offset, num_of_contours);
@@ -446,6 +514,6 @@ ArrayVec2 lu_extract_glyph_from_font(Arena *arena, String font, u16 code_point) 
     u64 glyph_offset        = tables[LOCA].offset + glyph_id * loca_index_format;
     u64 glyph_id_offset     = consume_u32(buf, &glyph_offset, 0) + tables[GLYF].offset;
 
-    return read_glyph_table(arena, buf, &glyph_id_offset);
+    return read_glyph_table(arena, buf, &glyph_id_offset, tables, loca_index_format);
 }
 

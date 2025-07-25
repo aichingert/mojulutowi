@@ -12,20 +12,21 @@ int main(void) {
 
     //String font = S("/home/booz/ext/nerd-fonts/src/unpatched-fonts/Iosevka/Iosevka-Medium.ttf");
     //String font = S("/home/booz/ext/nerd-fonts/src/unpatched-fonts/Arimo/Regular/Arimo-Regular.ttf");
-    //String font = S("/home/booz/ext/nerd-fonts/src/unpatched-fonts/JetBrainsMono/Ligatures/Regular/JetBrainsMono-Regular.ttf");
-    String font = S("/home/booz/ext/nerd-fonts/src/unpatched-fonts/UbuntuMono/Regular/UbuntuMono-R.ttf");
+    String font = S("/home/booz/ext/nerd-fonts/src/unpatched-fonts/JetBrainsMono/Ligatures/Regular/JetBrainsMono-Regular.ttf");
+    //String font = S("/home/booz/ext/nerd-fonts/src/unpatched-fonts/UbuntuMono/Regular/UbuntuMono-R.ttf");
 
     u8  c = 0;
-    u16 t = 0;
+    u32 t = 0;
 
     ArrayVec2 alphabet[26];
 
     for (u16 i = 0; i < 26; i++) {
-        alphabet[i] = lu_extract_glyph_from_font(app, font, 'A' + i);
+        printf("PARSING: %c\n", 'a' + i);
+        alphabet[i] = lu_extract_glyph_from_font(app, font, 'a' + i);
     }
 
     while (!lu_window_should_close(win)) {
-        if (t > 1000) {
+        if (t > 10000) {
             t = 0;
             c = (c + 1) % 26;
         }
