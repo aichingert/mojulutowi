@@ -39,8 +39,17 @@ typedef struct VkRenderer {
     VkSemaphore rel_semas[MAX_FRAMES_BETWEEN];
     VkFence between_fences[MAX_FRAMES_BETWEEN];
 
+    VkDescriptorPool        descriptor_pool;
+    VkDescriptorSetLayout   descriptor_set_layout;
+    VkDescriptorSet         *descriptor_sets;
+
+    VkImage         tex_image;
+    VkSampler       tex_sampler;
+    VkImageView     tex_image_view;
+    VkDeviceMemory  tex_image_mem;
+
     VkBuffer        vertex_buffer;
-    VkDeviceMemory  vertex_buffer_memory;
+    VkDeviceMemory  vertex_buffer_mem;
 
     u32 current_frame;
 

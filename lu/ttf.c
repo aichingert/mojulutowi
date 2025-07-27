@@ -326,7 +326,6 @@ void outline_simple_glyph_contour(
 
                 lu_array_push(arena, *vertices, p_0);
 
-                // Approximation for bezier
                 // p(t) = (1-t)^2p0 + 2t(1-t)p1 + t^2p2
                 for (f32 t = 0.001f; t < 1.0f; t += 0.001f) {
                     Vec2 p_t = {
@@ -465,7 +464,6 @@ ArrayVec2 read_compound_glyph(
         for (u64 i = 0; i < component_data.len; i++) {
             f32 x = component_data.v[i].x;
             f32 y = component_data.v[i].y;
-
             Vec2 point = { .x = x * a + b * y + e, .y = x * c + d * y + f };
 
             lu_array_push(arena, compound_data, point);

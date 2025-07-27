@@ -9,6 +9,7 @@
 #include <vulkan/vulkan.h>
 
 #include "lu.h"
+#include "math.h"
 #include "array.h"
 #include "arena.h"
 #include "string.h"
@@ -24,8 +25,13 @@
         assert(result_ == VK_SUCCESS); \
     } while(0)
 
+typedef struct Vertex {
+    Vec2 pos;
+    Vec2 tex;
+} Vertex;
+
 void        lu_setup_renderer(Arena *, Window *, String);
-void        lu_create_vertex_buffer(Window *, ArrayVec2);
+void        lu_create_vertex_buffer(Window *, Vertex *, u32);
 void        lu_destroy_vertex_buffer(Window *);
 void        lu_recreate_swapchain(Arena *, Window *);
 void        lu_draw_frame(Window *, size_t);
