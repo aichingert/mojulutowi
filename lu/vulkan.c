@@ -27,6 +27,8 @@ PFN_vkCmdBeginRenderingKHR vkCmdBeginRenderingKHR;
 PFN_vkCmdEndRenderingKHR vkCmdEndRenderingKHR;
 PFN_vkEnumerateDeviceExtensionProperties vkEnumerateDeviceExtensionProperties;
 PFN_vkGetPhysicalDeviceMemoryProperties vkGetPhysicalDeviceMemoryProperties;
+PFN_vkDestroyDebugUtilsMessengerEXT vkDestroyDebugUtilsMessengerEXT;
+PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessengerEXT;
 
 static PFN_vkGetDeviceProcAddr device_loader = NULL;
 
@@ -133,6 +135,8 @@ void instance_load_vulkan(VkInstance instance) {
     vkDestroyInstance = (PFN_vkDestroyInstance)loader(instance, "vkDestroyInstance");
     vkEnumerateDeviceExtensionProperties = (PFN_vkEnumerateDeviceExtensionProperties)loader(instance, "vkEnumerateDeviceExtensionProperties");
     vkGetPhysicalDeviceMemoryProperties = (PFN_vkGetPhysicalDeviceMemoryProperties)loader(instance, "vkGetPhysicalDeviceMemoryProperties");
+    vkDestroyDebugUtilsMessengerEXT = (PFN_vkDestroyDebugUtilsMessengerEXT)loader(instance, "vkDestroyDebugUtilsMessengerEXT");
+    vkCreateDebugUtilsMessengerEXT = (PFN_vkCreateDebugUtilsMessengerEXT)loader(instance, "vkCreateDebugUtilsMessengerEXT");
 
     vkCmdBeginRenderingKHR = (PFN_vkCmdBeginRenderingKHR)
         loader(instance, "vkCmdBeginRenderingKHR");
@@ -220,49 +224,28 @@ bool validation_layers_are_available() {
     return false;
 }
 
-static VkBool32 VKAPI_CALL debug_callback(
-        VkDebugReportFlagsEXT flags, 
-        VkDebugReportObjectTypeEXT object_type, 
-        u64 object, 
-        size_t location, 
-        s32 message_code, 
-        const char* p_layer_prefix, 
-        const char* p_message, 
-        void* p_user_data)
+VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
+    VkDebugUtilsMessageSeverityFlagBitsEXT msg_severity,
+    VkDebugUtilsMessageTypeFlagsEXT msg_type,
+    const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
+    void *pUserData)
 {
-    const char *log_i = (flags & VK_DEBUG_REPORT_ERROR_BIT_EXT) ? "ERROR"
-        : (flags & VK_DEBUG_REPORT_WARNING_BIT_EXT)             ? "WARNING"
-        : (flags & VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT) ? "PERFORMANCE" 
+    const char *log_i = (msg_severity & VK_DEBUG_REPORT_ERROR_BIT_EXT) ? "ERROR"
+        : (msg_severity & VK_DEBUG_REPORT_WARNING_BIT_EXT)             ? "WARNING"
+        : (msg_severity & VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT) ? "PERFORMANCE" 
         : "INFO";
 
     char msg[4096] = {0};
-    snprintf(msg, COUNT(msg), "%s: %s\n", log_i, p_message);
+    snprintf(msg, COUNT(msg), "%s: %s\n", log_i, pCallbackData->pMessage);
     printf("%s", msg);
 
-    if (flags & VK_DEBUG_REPORT_ERROR_BIT_EXT) assert(!"Validation error encountered!");
+    if (msg_severity & VK_DEBUG_REPORT_ERROR_BIT_EXT) assert(!"Validation error encountered!");
     return VK_FALSE;
 }
 
-VkDebugReportCallbackEXT register_debug_callback(VkInstance instance) {
-    if (!vkCreateDebugReportCallbackEXT) {
-		return NULL;
-    }
+void lu_create_instance(VkRenderer *vk, String name) {
+    load_instance_proc_addr();
 
-	VkDebugReportCallbackCreateInfoEXT create_info = { 
-        .sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT,
-        .flags = VK_DEBUG_REPORT_WARNING_BIT_EXT 
-        | VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT 
-        | VK_DEBUG_REPORT_ERROR_BIT_EXT,
-        .pfnCallback = debug_callback,
-    };
-
-	VkDebugReportCallbackEXT callback = {0};
-	VK_CHECK(vkCreateDebugReportCallbackEXT(instance, &create_info, 0, &callback));
-
-    return callback;
-}
-
-VkInstance lu_create_instance(String name) {
     VkApplicationInfo app_info = {
         .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
         .pApplicationName = name.value,
@@ -284,8 +267,22 @@ VkInstance lu_create_instance(String name) {
     const char *validation_layers[] = { VK_VALIDATION };
     assert(validation_layers_are_available() && "No validation layers are available");
 
+    // TODO:debug def
+    VkDebugUtilsMessengerCreateInfoEXT debug_create_info = { 
+        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+        .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT
+            | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
+            | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+        .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
+            | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
+            | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+        .pfnUserCallback = debug_callback,
+    };
+
     VkInstanceCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+        // TODO: debug def
+        .pNext = &debug_create_info,
         .pApplicationInfo = &app_info,
         .enabledExtensionCount = COUNT(extensions),
         .ppEnabledExtensionNames = extensions,
@@ -293,9 +290,10 @@ VkInstance lu_create_instance(String name) {
         .ppEnabledLayerNames = validation_layers,
     };
 
-    VkInstance instance = {0};
-    VK_CHECK(vkCreateInstance(&create_info, NULL, &instance));
-    return instance;
+    VK_CHECK(vkCreateInstance(&create_info, NULL, &vk->instance));
+    instance_load_vulkan(vk->instance);
+
+    VK_CHECK(vkCreateDebugUtilsMessengerEXT(vk->instance, &debug_create_info, NULL, &vk->debug_messenger));
 }
 
 void lu_create_surface(Window *win) {
@@ -1058,7 +1056,7 @@ void lu_record_command_buffer(
 static const u8 IMAGE[] = {
     0xFF, 0x00, 0x00, 0x00, 0xFF,
     0xFF, 0x00, 0x00, 0x00, 0xFF,
-    0xFF, 0x00, 0xF4, 0x00, 0xFF,
+    0xFF, 0x00, 0x0, 0x00, 0xFF,
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
     0xFF, 0x00, 0x00, 0x00, 0xFF,
     0xFF, 0x00, 0x00, 0x00, 0xFF,
@@ -1278,13 +1276,9 @@ void create_descriptor_sets(Arena *arena, VkRenderer *vk) {
 }
 
 void lu_setup_renderer(Arena *arena, Window *win, String name) {
-    load_instance_proc_addr();
-    VkInstance instance = lu_create_instance(name);
-    instance_load_vulkan(instance);
-
-    win->renderer.callback = register_debug_callback(instance);
-    win->renderer.instance = instance;
     win->renderer.current_frame = 0;
+
+    lu_create_instance(&win->renderer, name);
 
     lu_create_surface(win);
     pick_suitable_device(win);
@@ -1370,9 +1364,7 @@ void lu_free_renderer(Window *win) {
     }
 
     // TODO: ifdef debug
-    if (vkCreateDebugReportCallbackEXT) {
-        vkDestroyDebugReportCallbackEXT(vk->instance, vk->callback, NULL);
-    }
+    vkDestroyDebugUtilsMessengerEXT(vk->instance, vk->debug_messenger, NULL);
 
     vkDestroyCommandPool(vk->device, vk->command_pool, NULL);
     vkDestroyPipeline(vk->device, vk->graphics_pipeline, NULL);

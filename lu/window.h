@@ -54,7 +54,7 @@ typedef struct VkRenderer {
     u32 current_frame;
 
     // TODO: ifdef debug
-    VkDebugReportCallbackEXT callback;
+    VkDebugUtilsMessengerEXT debug_messenger;
 } VkRenderer;
 
 typedef struct Window {
